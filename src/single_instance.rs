@@ -497,4 +497,22 @@ mod tests {
         // Verify the stale PID file was removed
         assert!(!test_lock_path.exists(), "Stale PID file should be removed");
     }
+
+    #[test]
+    fn test_acquire_lock_permission_denied() {
+        let temp_dir = tempdir().unwrap();
+        let readonly_dir = temp_dir.path().join("readonly");
+        std::fs::create_dir(&readonly_dir).unwrap();
+        let mut perms = std::fs::metadata(&readonly_dir).unwrap().permissions();
+        perms.set_readonly(true);
+        std::fs::set_permissions(&readonly_dir, perms).unwrap();
+
+        let lock_path = readonly_dir.join("test.pid");
+
+        let result = SingleInstanceLock::acquire_with_test_path(&lock_path);
+        assert!(result.is_err());
+        if let Err(e) = result {
+            assert_eq!(e.kind(), io::ErrorKind::PermissionDenied);
+        }
+    }
 }
