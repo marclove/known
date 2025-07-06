@@ -3,12 +3,63 @@
 //! This module provides cross-platform autostart functionality using the auto-launch crate.
 //! It allows the daemon to be automatically started when the system boots.
 
-use auto_launch::AutoLaunchBuilder;
+use auto_launch::{AutoLaunch, AutoLaunchBuilder};
 use std::env;
 use std::io::{self, Error, ErrorKind};
 
 /// The application name used for autostart registration
 const APP_NAME: &str = "known-daemon";
+
+/// Builds the AutoLaunch instance with the correct configuration.
+///
+/// This function centralizes the creation of the AutoLaunch instance
+/// to avoid code duplication across enable, disable, and status check functions.
+///
+/// # Errors
+///
+/// Returns an error if the current executable path or working directory cannot be determined.
+fn build_auto_launch() -> io::Result<AutoLaunch> {
+    let current_exe = env::current_exe().map_err(|e| {
+        Error::new(
+            ErrorKind::NotFound,
+            format!("Could not determine current executable path: {}", e),
+        )
+    })?;
+
+    let current_dir = env::current_dir().map_err(|e| {
+        Error::new(
+            ErrorKind::NotFound,
+            format!("Could not determine current directory: {}", e),
+        )
+    })?;
+
+    AutoLaunchBuilder::new()
+        .set_app_name(APP_NAME)
+        .set_app_path(current_exe.to_str().ok_or_else(|| {
+            Error::new(
+                ErrorKind::InvalidData,
+                "Executable path contains invalid UTF-8 characters",
+            )
+        })?)
+        .set_use_launch_agent(true)
+        .set_args(&[
+            "daemon",
+            "--working-dir",
+            current_dir.to_str().ok_or_else(|| {
+                Error::new(
+                    ErrorKind::InvalidData,
+                    "Working directory path contains invalid UTF-8 characters",
+                )
+            })?,
+        ])
+        .build()
+        .map_err(|e| {
+            Error::new(
+                ErrorKind::Other,
+                format!("Failed to create AutoLaunch instance: {}", e),
+            )
+        })
+}
 
 /// Enables autostart for the known daemon.
 ///
@@ -30,54 +81,13 @@ const APP_NAME: &str = "known-daemon";
 /// - Autostart registration fails on the platform
 ///
 pub fn enable_autostart() -> io::Result<()> {
-    let current_exe = env::current_exe().map_err(|e| {
-        Error::new(
-            ErrorKind::NotFound,
-            format!("Could not determine current executable path: {}", e),
-        )
-    })?;
-
-    let current_dir = env::current_dir().map_err(|e| {
-        Error::new(
-            ErrorKind::NotFound,
-            format!("Could not determine current directory: {}", e),
-        )
-    })?;
-
-    let auto_launch = AutoLaunchBuilder::new()
-        .set_app_name(APP_NAME)
-        .set_app_path(current_exe.to_str().ok_or_else(|| {
-            Error::new(
-                ErrorKind::InvalidData,
-                "Executable path contains invalid UTF-8 characters",
-            )
-        })?)
-        .set_use_launch_agent(true)
-        .set_args(&[
-            "daemon",
-            "--working-dir",
-            current_dir.to_str().ok_or_else(|| {
-                Error::new(
-                    ErrorKind::InvalidData,
-                    "Working directory path contains invalid UTF-8 characters",
-                )
-            })?,
-        ])
-        .build()
-        .map_err(|e| {
-            Error::new(
-                ErrorKind::Other,
-                format!("Failed to create AutoLaunch instance: {}", e),
-            )
-        })?;
-
+    let auto_launch = build_auto_launch()?;
     auto_launch.enable().map_err(|e| {
         Error::new(
             ErrorKind::Other,
             format!("Failed to enable autostart: {}", e),
         )
     })?;
-
     Ok(())
 }
 
@@ -92,54 +102,13 @@ pub fn enable_autostart() -> io::Result<()> {
 /// - Autostart deregistration fails on the platform
 ///
 pub fn disable_autostart() -> io::Result<()> {
-    let current_exe = env::current_exe().map_err(|e| {
-        Error::new(
-            ErrorKind::NotFound,
-            format!("Could not determine current executable path: {}", e),
-        )
-    })?;
-
-    let current_dir = env::current_dir().map_err(|e| {
-        Error::new(
-            ErrorKind::NotFound,
-            format!("Could not determine current directory: {}", e),
-        )
-    })?;
-
-    let auto_launch = AutoLaunchBuilder::new()
-        .set_app_name(APP_NAME)
-        .set_app_path(current_exe.to_str().ok_or_else(|| {
-            Error::new(
-                ErrorKind::InvalidData,
-                "Executable path contains invalid UTF-8 characters",
-            )
-        })?)
-        .set_use_launch_agent(true)
-        .set_args(&[
-            "daemon",
-            "--working-dir",
-            current_dir.to_str().ok_or_else(|| {
-                Error::new(
-                    ErrorKind::InvalidData,
-                    "Working directory path contains invalid UTF-8 characters",
-                )
-            })?,
-        ])
-        .build()
-        .map_err(|e| {
-            Error::new(
-                ErrorKind::Other,
-                format!("Failed to create AutoLaunch instance: {}", e),
-            )
-        })?;
-
+    let auto_launch = build_auto_launch()?;
     auto_launch.disable().map_err(|e| {
         Error::new(
             ErrorKind::Other,
             format!("Failed to disable autostart: {}", e),
         )
     })?;
-
     Ok(())
 }
 
@@ -152,47 +121,7 @@ pub fn disable_autostart() -> io::Result<()> {
 /// - Autostart status cannot be determined
 ///
 pub fn is_autostart_enabled() -> io::Result<bool> {
-    let current_exe = env::current_exe().map_err(|e| {
-        Error::new(
-            ErrorKind::NotFound,
-            format!("Could not determine current executable path: {}", e),
-        )
-    })?;
-
-    let current_dir = env::current_dir().map_err(|e| {
-        Error::new(
-            ErrorKind::NotFound,
-            format!("Could not determine current directory: {}", e),
-        )
-    })?;
-
-    let auto_launch = AutoLaunchBuilder::new()
-        .set_app_name(APP_NAME)
-        .set_app_path(current_exe.to_str().ok_or_else(|| {
-            Error::new(
-                ErrorKind::InvalidData,
-                "Executable path contains invalid UTF-8 characters",
-            )
-        })?)
-        .set_use_launch_agent(true)
-        .set_args(&[
-            "daemon",
-            "--working-dir",
-            current_dir.to_str().ok_or_else(|| {
-                Error::new(
-                    ErrorKind::InvalidData,
-                    "Working directory path contains invalid UTF-8 characters",
-                )
-            })?,
-        ])
-        .build()
-        .map_err(|e| {
-            Error::new(
-                ErrorKind::Other,
-                format!("Failed to create AutoLaunch instance: {}", e),
-            )
-        })?;
-
+    let auto_launch = build_auto_launch()?;
     auto_launch.is_enabled().map_err(|e| {
         Error::new(
             ErrorKind::Other,
