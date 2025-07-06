@@ -17,7 +17,7 @@ const APP_NAME: &str = "known-daemon";
 ///
 /// # Errors
 ///
-/// Returns an error if the current executable path or working directory cannot be determined.
+/// Returns an error if the current executable path cannot be determined.
 fn build_auto_launch() -> io::Result<AutoLaunch> {
     let current_exe = env::current_exe().map_err(|e| {
         Error::new(
@@ -26,12 +26,6 @@ fn build_auto_launch() -> io::Result<AutoLaunch> {
         )
     })?;
 
-    let current_dir = env::current_dir().map_err(|e| {
-        Error::new(
-            ErrorKind::NotFound,
-            format!("Could not determine current directory: {}", e),
-        )
-    })?;
 
     AutoLaunchBuilder::new()
         .set_app_name(APP_NAME)
@@ -42,16 +36,7 @@ fn build_auto_launch() -> io::Result<AutoLaunch> {
             )
         })?)
         .set_use_launch_agent(true)
-        .set_args(&[
-            "daemon",
-            "--working-dir",
-            current_dir.to_str().ok_or_else(|| {
-                Error::new(
-                    ErrorKind::InvalidData,
-                    "Working directory path contains invalid UTF-8 characters",
-                )
-            })?,
-        ])
+        .set_args(&["run-daemon"])
         .build()
         .map_err(|e| {
             Error::new(
@@ -64,8 +49,8 @@ fn build_auto_launch() -> io::Result<AutoLaunch> {
 /// Enables autostart for the known daemon.
 ///
 /// This function registers the current executable to start automatically
-/// when the system boots. The daemon will start with the `daemon` command
-/// in the current working directory.
+/// when the system boots. The daemon will start with the `run-daemon` command
+/// and use the global configuration file to determine which directories to watch.
 ///
 /// # Platform Support
 ///
@@ -77,7 +62,6 @@ fn build_auto_launch() -> io::Result<AutoLaunch> {
 ///
 /// Returns an error if:
 /// - The current executable path cannot be determined
-/// - The current working directory cannot be determined
 /// - Autostart registration fails on the platform
 ///
 pub fn enable_autostart() -> io::Result<()> {
