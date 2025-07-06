@@ -19,3 +19,10 @@
 - File creation events often generate multiple events (Create, Modify metadata, Modify content) - handle all relevant event types
 - Use `RecursiveMode::NonRecursive` when only watching direct files in a directory, not subdirectories
 - **File Rename Handling**: `EventKind::Modify(_)` is NOT the same as `EventKind::Create(_)` - file renames generate two separate events: `Modify(ModifyKind::Name(RenameMode::From))` for the old name and `Modify(ModifyKind::Name(RenameMode::To))` for the new name. Handle them differently: remove symlinks for `From` events and create symlinks for `To` events to avoid stale symlinks
+
+## Testing System Process Operations
+- **Signal Interference in Parallel Tests**: Tests that send real signals (like SIGTERM) to processes can interfere with other tests running in parallel, causing failures like "signal: 15, SIGTERM: termination signal"
+- **Isolation Pattern**: For functions that interact with system processes, provide test-specific versions that accept custom file paths instead of using system-wide paths. Example: `stop_daemon_with_test_path()` vs `stop_daemon()`
+- **Test Separation**: Keep acceptance tests (using real system functions) separate from unit tests (using isolated test functions) to prevent cross-contamination
+- **Test Naming Convention**: Use clear naming to distinguish between isolated unit tests and system integration tests (e.g., `test_stop_daemon_no_pid_file` vs `test_stop_command_acceptance`)
+- **Multiple Test Verification**: Run tests multiple times consecutively to verify stability after fixing parallel execution issues

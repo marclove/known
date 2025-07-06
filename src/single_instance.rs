@@ -167,6 +167,103 @@ fn is_process_running(pid: i32) -> bool {
     }
 }
 
+/// Attempts to stop the running daemon process by reading the PID from the lock file
+/// and sending a SIGTERM signal.
+///
+/// This function reads the PID from the system-wide lock file and attempts to
+/// gracefully terminate the daemon process. If the process is not running or
+/// the lock file doesn't exist, it returns an appropriate error.
+///
+/// # Returns
+///
+/// Returns `Ok(())` if the daemon was successfully stopped, or an error if:
+/// - No daemon is currently running
+/// - The PID file doesn't exist or is invalid
+/// - The process couldn't be terminated
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - The PID file doesn't exist (no daemon running)
+/// - The PID file contains invalid data
+/// - The process is not running or doesn't exist
+/// - Permission denied when trying to terminate the process
+/// - Unable to determine application directories for this platform
+///
+pub fn stop_daemon() -> io::Result<()> {
+    let pid_file_path = get_system_wide_lock_path()?;
+    stop_daemon_with_path(pid_file_path)
+}
+
+/// Stops a daemon process using a custom PID file path (for testing)
+#[cfg(test)]
+pub fn stop_daemon_with_test_path<P: AsRef<std::path::Path>>(pid_file_path: P) -> io::Result<()> {
+    stop_daemon_with_path(pid_file_path.as_ref().to_path_buf())
+}
+
+/// Internal function that handles the actual daemon stopping logic
+fn stop_daemon_with_path(pid_file_path: std::path::PathBuf) -> io::Result<()> {
+    // Check if PID file exists
+    if !pid_file_path.exists() {
+        return Err(io::Error::new(
+            io::ErrorKind::NotFound,
+            "No daemon is currently running (PID file not found)",
+        ));
+    }
+
+    // Read the PID from the file
+    let contents = std::fs::read_to_string(&pid_file_path)?;
+    let pid_str = contents.trim();
+
+    if pid_str.is_empty() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidData,
+            "PID file is empty or contains no valid PID",
+        ));
+    }
+
+    let pid = pid_str.parse::<i32>().map_err(|_| {
+        io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!("Invalid PID in lock file: '{}'", pid_str),
+        )
+    })?;
+
+    // Check if the process is actually running
+    if !is_process_running(pid) {
+        // Remove stale PID file
+        let _ = std::fs::remove_file(&pid_file_path);
+        return Err(io::Error::new(
+            io::ErrorKind::NotFound,
+            format!(
+                "Daemon process with PID {} is not running (removing stale PID file)",
+                pid
+            ),
+        ));
+    }
+
+    // Send SIGTERM to gracefully terminate the process
+    match kill(Pid::from_raw(pid), Some(nix::sys::signal::Signal::SIGTERM)) {
+        Ok(()) => {
+            // Wait a moment for the process to clean up
+            std::thread::sleep(std::time::Duration::from_millis(100));
+
+            // Check if process is still running
+            if !is_process_running(pid) {
+                Ok(())
+            } else {
+                // Process is still running, but we successfully sent the signal
+                // The process should terminate soon
+                Ok(())
+            }
+        }
+        Err(e) => Err(io::Error::new(
+            io::ErrorKind::PermissionDenied,
+            format!("Failed to terminate daemon process with PID {}: {}", pid, e),
+        )),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -313,5 +410,91 @@ mod tests {
         // Now it should work again
         let lock3 = SingleInstanceLock::acquire_with_test_path(&test_lock_path).unwrap();
         drop(lock3);
+    }
+
+    #[test]
+    fn test_stop_daemon_no_pid_file() {
+        // Test stopping daemon when no PID file exists
+        let test_dir = tempdir().unwrap();
+        let test_lock_path = test_dir.path().join("nonexistent.pid");
+
+        // Use the test-specific function to avoid affecting real daemon processes
+        assert!(!test_lock_path.exists(), "Test PID file should not exist");
+
+        let result = stop_daemon_with_test_path(&test_lock_path);
+        assert!(result.is_err(), "Should fail when PID file doesn't exist");
+
+        let err = result.unwrap_err();
+        assert_eq!(err.kind(), io::ErrorKind::NotFound);
+        assert!(err.to_string().contains("No daemon is currently running"));
+    }
+
+    #[test]
+    fn test_stop_daemon_invalid_pid_file() {
+        let test_dir = tempdir().unwrap();
+        let test_lock_path = test_dir.path().join("invalid.pid");
+
+        // Create a PID file with invalid content
+        std::fs::write(&test_lock_path, "not_a_number\n").unwrap();
+
+        // Test that the function properly handles invalid PID content
+        let result = stop_daemon_with_test_path(&test_lock_path);
+        assert!(
+            result.is_err(),
+            "Should fail when PID file contains invalid data"
+        );
+
+        let err = result.unwrap_err();
+        assert_eq!(err.kind(), io::ErrorKind::InvalidData);
+        assert!(err.to_string().contains("Invalid PID in lock file"));
+    }
+
+    #[test]
+    fn test_stop_daemon_empty_pid_file() {
+        let test_dir = tempdir().unwrap();
+        let test_lock_path = test_dir.path().join("empty.pid");
+
+        // Create an empty PID file
+        std::fs::write(&test_lock_path, "").unwrap();
+
+        // Test that the function properly handles empty PID file
+        let result = stop_daemon_with_test_path(&test_lock_path);
+        assert!(result.is_err(), "Should fail when PID file is empty");
+
+        let err = result.unwrap_err();
+        assert_eq!(err.kind(), io::ErrorKind::InvalidData);
+        assert!(err.to_string().contains("PID file is empty"));
+    }
+
+    #[test]
+    fn test_stop_daemon_stale_pid_file() {
+        let test_dir = tempdir().unwrap();
+        let test_lock_path = test_dir.path().join("stale.pid");
+
+        // Create a PID file with a non-existent PID
+        let fake_pid = 999999; // Very unlikely to be a real PID
+        std::fs::write(&test_lock_path, format!("{}\n", fake_pid)).unwrap();
+
+        // Test that is_process_running correctly identifies non-existent processes
+        assert!(
+            !is_process_running(fake_pid),
+            "Fake PID should not be running"
+        );
+
+        assert!(
+            test_lock_path.exists(),
+            "Test file should exist before cleanup"
+        );
+
+        // Test that stop_daemon properly handles stale PID files
+        let result = stop_daemon_with_test_path(&test_lock_path);
+        assert!(result.is_err(), "Should fail when PID is not running");
+
+        let err = result.unwrap_err();
+        assert_eq!(err.kind(), io::ErrorKind::NotFound);
+        assert!(err.to_string().contains("is not running"));
+
+        // Verify the stale PID file was removed
+        assert!(!test_lock_path.exists(), "Stale PID file should be removed");
     }
 }

@@ -17,5 +17,5 @@ pub use config::{
     add_directory_to_config, load_config, remove_directory_from_config, save_config, Config,
 };
 pub use daemon::start_daemon;
-pub use single_instance::SingleInstanceLock;
+pub use single_instance::{stop_daemon, SingleInstanceLock};
 pub use symlinks::{create_symlinks, create_symlinks_in_dir};
