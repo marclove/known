@@ -125,10 +125,24 @@ pub fn load_config() -> io::Result<Config> {
     }
 
     let config_content = fs::read_to_string(&config_path)?;
-    let config: Config = serde_json::from_str(&config_content).map_err(|e| {
+
+    // Trim any trailing whitespace or newlines that might cause parsing issues
+    let trimmed_content = config_content.trim();
+
+    // Handle empty file case
+    if trimmed_content.is_empty() {
+        return Ok(Config::default());
+    }
+
+    let config: Config = serde_json::from_str(trimmed_content).map_err(|e| {
         io::Error::new(
             io::ErrorKind::InvalidData,
-            format!("Failed to parse configuration file: {}", e),
+            format!(
+                "Failed to parse configuration file at {}: {} (content length: {} chars)",
+                config_path.display(),
+                e,
+                trimmed_content.len()
+            ),
         )
     })?;
 
@@ -156,15 +170,89 @@ pub fn save_config(config: &Config) -> io::Result<()> {
         fs::create_dir_all(parent)?;
     }
 
-    let config_content = serde_json::to_string_pretty(config).map_err(|e| {
+    let mut config_content = serde_json::to_string_pretty(config).map_err(|e| {
         io::Error::new(
             io::ErrorKind::InvalidData,
             format!("Failed to serialize configuration: {}", e),
         )
     })?;
 
+    // Ensure the file ends with a newline
+    if !config_content.ends_with('\n') {
+        config_content.push('\n');
+    }
+
     fs::write(&config_path, config_content)?;
     Ok(())
+}
+
+/// Safely modifies the configuration file using atomic writes to prevent race conditions
+///
+/// # Arguments
+///
+/// * `modifier` - Function that modifies the configuration and returns whether changes were made
+///
+/// # Errors
+///
+/// Returns an error if file operations fail
+fn modify_config_safely<F>(modifier: F) -> io::Result<bool>
+where
+    F: FnOnce(&mut Config) -> bool,
+{
+    let config_path = get_config_file_path()?;
+
+    // Create the configuration directory if it doesn't exist
+    if let Some(parent) = config_path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+
+    // Read the current configuration
+    let config_content = if config_path.exists() {
+        fs::read_to_string(&config_path)?
+    } else {
+        String::new()
+    };
+
+    let mut config = if config_content.trim().is_empty() {
+        Config::default()
+    } else {
+        serde_json::from_str(config_content.trim()).map_err(|e| {
+            io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!(
+                    "Failed to parse configuration file at {}: {} (content length: {} chars)",
+                    config_path.display(),
+                    e,
+                    config_content.trim().len()
+                ),
+            )
+        })?
+    };
+
+    // Apply the modification
+    let changed = modifier(&mut config);
+
+    if changed {
+        // Serialize the updated configuration
+        let mut new_content = serde_json::to_string_pretty(&config).map_err(|e| {
+            io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!("Failed to serialize configuration: {}", e),
+            )
+        })?;
+
+        // Ensure the file ends with a newline
+        if !new_content.ends_with('\n') {
+            new_content.push('\n');
+        }
+
+        // Use atomic write by writing to a temporary file and then renaming
+        let temp_path = config_path.with_extension("json.tmp");
+        fs::write(&temp_path, new_content)?;
+        fs::rename(&temp_path, &config_path)?;
+    }
+
+    Ok(changed)
 }
 
 /// Adds a directory to the configuration and saves it
@@ -177,10 +265,8 @@ pub fn save_config(config: &Config) -> io::Result<()> {
 ///
 /// Returns an error if loading or saving the configuration fails
 pub fn add_directory_to_config<P: AsRef<Path>>(dir_path: P) -> io::Result<bool> {
-    let mut config = load_config()?;
-    let added = config.add_directory(dir_path);
-    save_config(&config)?;
-    Ok(added)
+    let dir_path = dir_path.as_ref().to_path_buf();
+    modify_config_safely(|config| config.add_directory(&dir_path))
 }
 
 /// Removes a directory from the configuration and saves it
@@ -193,10 +279,8 @@ pub fn add_directory_to_config<P: AsRef<Path>>(dir_path: P) -> io::Result<bool> 
 ///
 /// Returns an error if loading or saving the configuration fails
 pub fn remove_directory_from_config<P: AsRef<Path>>(dir_path: P) -> io::Result<bool> {
-    let mut config = load_config()?;
-    let removed = config.remove_directory(dir_path);
-    save_config(&config)?;
-    Ok(removed)
+    let dir_path = dir_path.as_ref().to_path_buf();
+    modify_config_safely(|config| config.remove_directory(&dir_path))
 }
 
 /// Loads configuration from a specific file path (for testing)
@@ -217,10 +301,24 @@ pub fn load_config_from_file<P: AsRef<Path>>(config_path: P) -> io::Result<Confi
     }
 
     let config_content = fs::read_to_string(config_path)?;
-    let config: Config = serde_json::from_str(&config_content).map_err(|e| {
+
+    // Trim any trailing whitespace or newlines that might cause parsing issues
+    let trimmed_content = config_content.trim();
+
+    // Handle empty file case
+    if trimmed_content.is_empty() {
+        return Ok(Config::default());
+    }
+
+    let config: Config = serde_json::from_str(trimmed_content).map_err(|e| {
         io::Error::new(
             io::ErrorKind::InvalidData,
-            format!("Failed to parse configuration file: {}", e),
+            format!(
+                "Failed to parse configuration file at {}: {} (content length: {} chars)",
+                config_path.display(),
+                e,
+                trimmed_content.len()
+            ),
         )
     })?;
 
@@ -245,15 +343,90 @@ pub fn save_config_to_file<P: AsRef<Path>>(config: &Config, config_path: P) -> i
         fs::create_dir_all(parent)?;
     }
 
-    let config_content = serde_json::to_string_pretty(config).map_err(|e| {
+    let mut config_content = serde_json::to_string_pretty(config).map_err(|e| {
         io::Error::new(
             io::ErrorKind::InvalidData,
             format!("Failed to serialize configuration: {}", e),
         )
     })?;
 
+    // Ensure the file ends with a newline
+    if !config_content.ends_with('\n') {
+        config_content.push('\n');
+    }
+
     fs::write(config_path, config_content)?;
     Ok(())
+}
+
+/// Safely modifies a specific configuration file using atomic writes (for testing)
+///
+/// # Arguments
+///
+/// * `config_path` - Path to the configuration file
+/// * `modifier` - Function that modifies the configuration and returns whether changes were made
+///
+/// # Errors
+///
+/// Returns an error if file operations fail
+fn modify_config_file_safely<F, P: AsRef<Path>>(config_path: P, modifier: F) -> io::Result<bool>
+where
+    F: FnOnce(&mut Config) -> bool,
+{
+    let config_path = config_path.as_ref();
+
+    // Create the configuration directory if it doesn't exist
+    if let Some(parent) = config_path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+
+    // Read the current configuration
+    let config_content = if config_path.exists() {
+        fs::read_to_string(config_path)?
+    } else {
+        String::new()
+    };
+
+    let mut config = if config_content.trim().is_empty() {
+        Config::default()
+    } else {
+        serde_json::from_str(config_content.trim()).map_err(|e| {
+            io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!(
+                    "Failed to parse configuration file at {}: {} (content length: {} chars)",
+                    config_path.display(),
+                    e,
+                    config_content.trim().len()
+                ),
+            )
+        })?
+    };
+
+    // Apply the modification
+    let changed = modifier(&mut config);
+
+    if changed {
+        // Serialize the updated configuration
+        let mut new_content = serde_json::to_string_pretty(&config).map_err(|e| {
+            io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!("Failed to serialize configuration: {}", e),
+            )
+        })?;
+
+        // Ensure the file ends with a newline
+        if !new_content.ends_with('\n') {
+            new_content.push('\n');
+        }
+
+        // Use atomic write by writing to a temporary file and then renaming
+        let temp_path = config_path.with_extension("json.tmp");
+        fs::write(&temp_path, new_content)?;
+        fs::rename(&temp_path, config_path)?;
+    }
+
+    Ok(changed)
 }
 
 /// Adds a directory to a specific configuration file (for testing)
@@ -270,10 +443,8 @@ pub fn add_directory_to_config_file<P: AsRef<Path>, C: AsRef<Path>>(
     dir_path: P,
     config_path: C,
 ) -> io::Result<bool> {
-    let mut config = load_config_from_file(&config_path)?;
-    let added = config.add_directory(dir_path);
-    save_config_to_file(&config, config_path)?;
-    Ok(added)
+    let dir_path = dir_path.as_ref().to_path_buf();
+    modify_config_file_safely(config_path, |config| config.add_directory(&dir_path))
 }
 
 /// Removes a directory from a specific configuration file (for testing)
@@ -290,10 +461,8 @@ pub fn remove_directory_from_config_file<P: AsRef<Path>, C: AsRef<Path>>(
     dir_path: P,
     config_path: C,
 ) -> io::Result<bool> {
-    let mut config = load_config_from_file(&config_path)?;
-    let removed = config.remove_directory(dir_path);
-    save_config_to_file(&config, config_path)?;
-    Ok(removed)
+    let dir_path = dir_path.as_ref().to_path_buf();
+    modify_config_file_safely(config_path, |config| config.remove_directory(&dir_path))
 }
 
 #[cfg(test)]
