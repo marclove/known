@@ -34,18 +34,17 @@ The codebase provides the following main functionality:
 
 1. **`create_agents_file()`** - Creates AGENTS.md files with case-insensitive checks and handles migration from existing CLAUDE.md or GEMINI.md files
 2. **`create_symlinks()`** - Creates symlinks from CLAUDE.md and GEMINI.md to AGENTS.md, migrates files from .cursor/rules and .windsurf/rules to .rules directory, and automatically adds the directory to the configuration file for daemon tracking
-3. **`start_daemon()`** - (Deprecated) Starts a file watching daemon that monitors a single .rules directory and maintains synchronized symlinks in .cursor/rules and .windsurf/rules. Enforces system-wide single instance operation using centralized PID file locking.
-4. **`start_system_daemon()`** - Starts a system-wide daemon that watches all configured directories from the configuration file, monitoring each directory's .rules subdirectory and maintaining synchronized symlinks across all projects
-5. **`enable_autostart()`** - Enables cross-platform autostart for the daemon using the auto-launch crate
-6. **`disable_autostart()`** - Disables autostart for the daemon
-7. **`is_autostart_enabled()`** - Checks if autostart is currently enabled
-8. **`SingleInstanceLock`** - Provides system-wide PID file locking mechanism to ensure only one daemon instance runs at a time across the entire system
-9. **Configuration management functions**:
+3. **`start_daemon()`** - Starts a daemon that watches all configured directories from the configuration file, monitoring each directory's .rules subdirectory and maintaining synchronized symlinks across all projects. Enforces system-wide single instance operation using centralized PID file locking.
+4. **`enable_autostart()`** - Enables cross-platform autostart for the daemon using the auto-launch crate
+5. **`disable_autostart()`** - Disables autostart for the daemon
+6. **`is_autostart_enabled()`** - Checks if autostart is currently enabled
+7. **`SingleInstanceLock`** - Provides system-wide PID file locking mechanism to ensure only one daemon instance runs at a time across the entire system
+8. **Configuration management functions**:
    - `load_config()` - Loads configuration from platform-specific application directory
    - `save_config()` - Saves configuration to platform-specific application directory
    - `add_directory_to_config()` - Adds a directory to the watched directories list
    - `remove_directory_from_config()` - Removes a directory from the watched directories list
-10. **Helper functions**:
+9. **Helper functions**:
    - `ensure_rules_directory_exists()` - Creates .rules directory if it doesn't exist
    - `remove_existing_symlinks()` - Removes existing symlink files before creating new ones
    - `move_files_to_rules_dir()` - Moves files from source directories to .rules with conflict handling
@@ -56,9 +55,8 @@ The codebase provides the following main functionality:
 ### CLI Commands
 
 - `known init` - Initialize project with AGENTS.md file and .rules directory
-- `known symlink` - Create symlinks and migrate rules files from various AI assistant directories; automatically adds the directory to configuration for system-wide daemon tracking
-- `known daemon` - Start daemon to watch .rules directory and maintain symlinks in .cursor/rules and .windsurf/rules (deprecated, use `--system-wide` flag for new behavior)
-- `known daemon --system-wide` - Start system-wide daemon that watches all configured directories from the configuration file
+- `known symlink` - Create symlinks and migrate rules files from various AI assistant directories; automatically adds the directory to configuration for daemon tracking
+- `known daemon` - Start daemon that watches all configured directories from the configuration file and maintains symlinks in .cursor/rules and .windsurf/rules
 - `known enable-autostart` - Enable autostart for the daemon
 - `known disable-autostart` - Disable autostart for the daemon
 - `known autostart-status` - Check if autostart is enabled
@@ -75,6 +73,10 @@ All functions include comprehensive unit tests using Rust's built-in testing fra
 6. Update the ROADMAP.md file.
 7. Review the LESSONS_LEARNED.md file and consider making updates.
 8. Review AGENTS.md and evaluate whether it should be updated.
+
+### Backwards Compatibility Policy
+- **Pre-Release Phase**: Since we have not done a public release yet, we do not need to provide backwards compatibility. Breaking changes can be implemented freely to improve the API and architecture without worrying about existing users.
+- **Post-Release**: Once we have done our first public release (version 1.0.0), we will follow semantic versioning and provide appropriate backwards compatibility guarantees.
 
 ### Code Quality Standards
 - **String Constants**: Extract repeated string literals into typed constants using `const NAME: &str = "value"` following `SCREAMING_SNAKE_CASE` naming conventions. This provides compile-time type checking and maintainability.

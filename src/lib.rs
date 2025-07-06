@@ -16,6 +16,6 @@ pub use autostart::{disable_autostart, enable_autostart, is_autostart_enabled};
 pub use config::{
     add_directory_to_config, load_config, remove_directory_from_config, save_config, Config,
 };
-pub use daemon::{start_daemon, start_system_daemon};
+pub use daemon::start_daemon;
 pub use single_instance::SingleInstanceLock;
 pub use symlinks::{create_symlinks, create_symlinks_in_dir};

@@ -24,7 +24,7 @@ const CURSOR_RULES_DIR: &str = ".cursor/rules";
 /// The directory name for windsurf rules files
 const WINDSURF_RULES_DIR: &str = ".windsurf/rules";
 
-/// Starts a system-wide daemon that watches all configured directories for changes
+/// Starts a daemon that watches all configured directories for changes
 /// and maintains synchronized symlinks in .cursor/rules and .windsurf/rules directories.
 ///
 /// This function creates a file watcher that monitors all directories configured in the
@@ -64,7 +64,7 @@ const WINDSURF_RULES_DIR: &str = ".windsurf/rules";
 /// - Directory creation fails
 /// - Unable to determine application directories for this platform
 ///
-pub fn start_system_daemon(shutdown_rx: mpsc::Receiver<()>) -> io::Result<()> {
+pub fn start_daemon(shutdown_rx: mpsc::Receiver<()>) -> io::Result<()> {
     // Acquire system-wide single instance lock first
     let _lock = SingleInstanceLock::acquire()?;
     println!("Acquired system-wide single instance lock");
@@ -158,7 +158,7 @@ pub fn start_system_daemon(shutdown_rx: mpsc::Receiver<()>) -> io::Result<()> {
         // Check for file system events (with timeout)
         match rx.recv_timeout(Duration::from_millis(100)) {
             Ok(Ok(event)) => {
-                if let Err(e) = handle_system_file_event(&event, &rules_paths) {
+                if let Err(e) = handle_file_event(&event, &rules_paths) {
                     eprintln!("Error handling file event: {}", e);
                 }
             }
@@ -179,135 +179,7 @@ pub fn start_system_daemon(shutdown_rx: mpsc::Receiver<()>) -> io::Result<()> {
     Ok(())
 }
 
-/// Starts a daemon that watches the .rules directory for changes and maintains
-/// synchronized symlinks in .cursor/rules and .windsurf/rules directories.
-///
-/// This function creates a file watcher that monitors the .rules directory for
-/// file additions, modifications, and deletions. When changes are detected,
-/// it automatically updates the corresponding symlinks in the .cursor/rules
-/// and .windsurf/rules directories to keep them in sync.
-///
-/// # Single Instance Enforcement
-///
-/// Only one instance of the daemon can run at a time system-wide. The function uses a PID
-/// file locking mechanism with a centralized lock file to ensure that multiple daemon processes cannot run
-/// simultaneously anywhere on the system.
-///
-/// # Behavior
-///
-/// - Acquires a system-wide single instance lock using a centralized PID file
-/// - Watches the .rules directory recursively for file system events
-/// - Creates symlinks in .cursor/rules and .windsurf/rules for each file in .rules
-/// - Removes symlinks when files are deleted from .rules
-/// - Runs indefinitely until the receiver channel is closed
-/// - Prints status messages to stdout for user feedback
-/// - Automatically releases the lock when the daemon stops
-///
-/// # Arguments
-///
-/// * `dir` - The directory path containing the .rules directory to watch
-/// * `shutdown_rx` - A receiver channel that signals when to stop the daemon
-///
-/// # Errors
-///
-/// Returns an error if:
-/// - Another instance of the daemon is already running system-wide
-/// - The .rules directory doesn't exist
-/// - Watcher creation fails
-/// - File system operations fail
-/// - Directory creation fails
-/// - Unable to determine application directories for this platform
-///
-/// # Deprecated
-///
-/// This function is deprecated in favor of `start_system_daemon` which watches
-/// all configured directories from the configuration file.
-pub fn start_daemon<P: AsRef<Path>>(dir: P, shutdown_rx: mpsc::Receiver<()>) -> io::Result<()> {
-    let dir = dir.as_ref();
-    let rules_path = dir.join(RULES_DIR);
-
-    // Acquire system-wide single instance lock first
-    let _lock = SingleInstanceLock::acquire()?;
-    println!("Acquired system-wide single instance lock");
-
-    // Check if .rules directory exists
-    if !rules_path.exists() {
-        return Err(io::Error::new(
-            io::ErrorKind::NotFound,
-            format!(".rules directory not found at {}", rules_path.display()),
-        ));
-    }
-
-    // Canonicalize rules path to handle symlinks properly
-    let rules_path_canonical = rules_path.canonicalize()?;
-
-    // Create target directories if they don't exist
-    let cursor_rules_path = dir.join(CURSOR_RULES_DIR);
-    let windsurf_rules_path = dir.join(WINDSURF_RULES_DIR);
-
-    if let Some(parent) = cursor_rules_path.parent() {
-        fs::create_dir_all(parent)?;
-    }
-    if let Some(parent) = windsurf_rules_path.parent() {
-        fs::create_dir_all(parent)?;
-    }
-
-    // Create initial symlinks for existing files
-    sync_rules_directory(&rules_path, &cursor_rules_path, &windsurf_rules_path)?;
-
-    // Set up file watcher
-    let (tx, rx) = mpsc::channel();
-    let mut watcher = RecommendedWatcher::new(tx, Config::default())
-        .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
-
-    // Watch the .rules directory
-    watcher
-        .watch(&rules_path, RecursiveMode::NonRecursive)
-        .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
-
-    println!(
-        "Daemon started, watching {} for changes...",
-        rules_path.display()
-    );
-
-    // Main event loop
-    loop {
-        // Check for shutdown signal (non-blocking)
-        if let Ok(()) = shutdown_rx.try_recv() {
-            println!("Daemon shutdown requested");
-            break;
-        }
-
-        // Check for file system events (with timeout)
-        match rx.recv_timeout(Duration::from_millis(100)) {
-            Ok(Ok(event)) => {
-                if let Err(e) = handle_file_event(
-                    &event,
-                    &rules_path_canonical,
-                    &cursor_rules_path,
-                    &windsurf_rules_path,
-                ) {
-                    eprintln!("Error handling file event: {}", e);
-                }
-            }
-            Ok(Err(e)) => {
-                eprintln!("Watch error: {}", e);
-            }
-            Err(mpsc::RecvTimeoutError::Timeout) => {
-                // Timeout is expected, continue loop
-            }
-            Err(mpsc::RecvTimeoutError::Disconnected) => {
-                println!("Watcher disconnected, stopping daemon");
-                break;
-            }
-        }
-    }
-
-    println!("Daemon stopped");
-    Ok(())
-}
-
-/// Handles a file system event for the system-wide daemon by updating symlinks in target directories.
+/// Handles a file system event by updating symlinks in target directories.
 ///
 /// # Arguments
 ///
@@ -318,10 +190,7 @@ pub fn start_daemon<P: AsRef<Path>>(dir: P, shutdown_rx: mpsc::Receiver<()>) -> 
 ///
 /// Returns an error if symlink operations fail
 ///
-fn handle_system_file_event(
-    event: &Event,
-    rules_paths: &HashMap<PathBuf, PathBuf>,
-) -> io::Result<()> {
+fn handle_file_event(event: &Event, rules_paths: &HashMap<PathBuf, PathBuf>) -> io::Result<()> {
     for path in &event.paths {
         // Find which rules directory this event belongs to
         let (_rules_path, parent_dir) = match rules_paths
@@ -415,98 +284,6 @@ fn handle_system_file_event(
     Ok(())
 }
 
-/// Handles a file system event by updating symlinks in target directories.
-///
-/// # Arguments
-///
-/// * `event` - The file system event to handle
-/// * `rules_path` - Path to the .rules directory
-/// * `cursor_rules_path` - Path to the .cursor/rules directory
-/// * `windsurf_rules_path` - Path to the .windsurf/rules directory
-///
-/// # Errors
-///
-/// Returns an error if symlink operations fail
-///
-fn handle_file_event(
-    event: &Event,
-    rules_path: &Path,
-    cursor_rules_path: &Path,
-    windsurf_rules_path: &Path,
-) -> io::Result<()> {
-    for path in &event.paths {
-        // Only handle files within the .rules directory
-        if !path.starts_with(rules_path) {
-            continue;
-        }
-
-        let file_name = match path.file_name() {
-            Some(name) => name,
-            None => continue,
-        };
-
-        let cursor_target = cursor_rules_path.join(file_name);
-        let windsurf_target = windsurf_rules_path.join(file_name);
-
-        match event.kind {
-            EventKind::Create(_) => {
-                // Create symlinks for new files
-                if path.is_file() {
-                    create_symlink_to_file(path, &cursor_target)?;
-                    create_symlink_to_file(path, &windsurf_target)?;
-                    println!("Created symlinks for {}", file_name.to_string_lossy());
-                }
-            }
-            EventKind::Modify(ModifyKind::Name(RenameMode::From)) => {
-                // File is being renamed FROM this name - remove old symlinks
-                if cursor_target.exists() {
-                    fs::remove_file(&cursor_target)?;
-                }
-                if windsurf_target.exists() {
-                    fs::remove_file(&windsurf_target)?;
-                }
-                println!(
-                    "Removed symlinks for renamed file {}",
-                    file_name.to_string_lossy()
-                );
-            }
-            EventKind::Modify(ModifyKind::Name(RenameMode::To)) => {
-                // File is being renamed TO this name - create new symlinks
-                if path.is_file() {
-                    create_symlink_to_file(path, &cursor_target)?;
-                    create_symlink_to_file(path, &windsurf_target)?;
-                    println!(
-                        "Created symlinks for renamed file {}",
-                        file_name.to_string_lossy()
-                    );
-                }
-            }
-            EventKind::Modify(_) => {
-                // Other modifications (content changes, metadata) - update symlinks if file exists
-                if path.is_file() {
-                    create_symlink_to_file(path, &cursor_target)?;
-                    create_symlink_to_file(path, &windsurf_target)?;
-                    println!("Updated symlinks for {}", file_name.to_string_lossy());
-                }
-            }
-            EventKind::Remove(_) => {
-                // Remove symlinks
-                if cursor_target.exists() {
-                    fs::remove_file(&cursor_target)?;
-                }
-                if windsurf_target.exists() {
-                    fs::remove_file(&windsurf_target)?;
-                }
-                println!("Removed symlinks for {}", file_name.to_string_lossy());
-            }
-            _ => {
-                // Ignore other event types
-            }
-        }
-    }
-    Ok(())
-}
-
 /// Synchronizes the rules directory with target directories by creating symlinks.
 ///
 /// This function scans the .rules directory and creates symlinks in both
@@ -552,263 +329,127 @@ fn sync_rules_directory(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::thread;
+    use crate::config::{save_config, Config};
     use tempfile::tempdir;
 
     #[test]
-    #[serial_test::serial]
-    fn test_daemon_watches_rules_directory() {
+    fn test_sync_rules_directory() {
         let dir = tempdir().unwrap();
 
-        // Create .rules directory
+        // Create .rules directory with test files
         let rules_path = dir.path().join(RULES_DIR);
         fs::create_dir(&rules_path).unwrap();
+        
+        let test_file1 = rules_path.join("test1.md");
+        let test_file2 = rules_path.join("test2.txt");
+        fs::write(&test_file1, "Test content 1").unwrap();
+        fs::write(&test_file2, "Test content 2").unwrap();
 
         // Create target directories
         let cursor_rules_path = dir.path().join(CURSOR_RULES_DIR);
         let windsurf_rules_path = dir.path().join(WINDSURF_RULES_DIR);
-        fs::create_dir_all(&cursor_rules_path).unwrap();
-        fs::create_dir_all(&windsurf_rules_path).unwrap();
 
-        // Create channel for shutdown signal
-        let (shutdown_tx, shutdown_rx) = mpsc::channel();
+        // Call sync_rules_directory
+        sync_rules_directory(&rules_path, &cursor_rules_path, &windsurf_rules_path).unwrap();
 
-        // Add a file to .rules directory BEFORE starting daemon
-        let test_file = rules_path.join("test.md");
-        fs::write(&test_file, "# Test content").unwrap();
+        // Verify symlinks were created
+        let cursor_symlink1 = cursor_rules_path.join("test1.md");
+        let cursor_symlink2 = cursor_rules_path.join("test2.txt");
+        let windsurf_symlink1 = windsurf_rules_path.join("test1.md");
+        let windsurf_symlink2 = windsurf_rules_path.join("test2.txt");
 
-        // Start daemon in background thread
-        let daemon_dir = dir.path().to_path_buf();
-        let daemon_handle = thread::spawn(move || start_daemon(daemon_dir, shutdown_rx));
-
-        // Give daemon time to start and sync existing files
-        thread::sleep(Duration::from_millis(300));
-
-        // Verify symlinks were created in target directories for existing file
-        let cursor_symlink = cursor_rules_path.join("test.md");
-        let windsurf_symlink = windsurf_rules_path.join("test.md");
-        assert!(cursor_symlink.exists(), "Cursor symlink should exist");
-        assert!(windsurf_symlink.exists(), "Windsurf symlink should exist");
+        assert!(cursor_symlink1.exists(), "Cursor symlink 1 should exist");
+        assert!(cursor_symlink2.exists(), "Cursor symlink 2 should exist");
+        assert!(windsurf_symlink1.exists(), "Windsurf symlink 1 should exist");
+        assert!(windsurf_symlink2.exists(), "Windsurf symlink 2 should exist");
 
         // Verify symlinks point to correct content
-        let cursor_content = fs::read_to_string(&cursor_symlink).unwrap();
-        let windsurf_content = fs::read_to_string(&windsurf_symlink).unwrap();
-        assert_eq!(cursor_content, "# Test content");
-        assert_eq!(windsurf_content, "# Test content");
-
-        // Test adding a new file after daemon start
-        let test_file2 = rules_path.join("test2.md");
-        fs::write(&test_file2, "# Test content 2").unwrap();
-
-        // Give daemon time to process the new file
-        thread::sleep(Duration::from_millis(300));
-
-        // Verify symlinks were created for new file
-        let cursor_symlink2 = cursor_rules_path.join("test2.md");
-        let windsurf_symlink2 = windsurf_rules_path.join("test2.md");
-        assert!(cursor_symlink2.exists(), "Cursor symlink 2 should exist");
-        assert!(
-            windsurf_symlink2.exists(),
-            "Windsurf symlink 2 should exist"
-        );
-
-        // Delete the original file from .rules directory
-        fs::remove_file(&test_file).unwrap();
-
-        // Give daemon time to process the deletion
-        thread::sleep(Duration::from_millis(300));
-
-        // Verify symlinks were removed
-        assert!(!cursor_symlink.exists(), "Cursor symlink should be removed");
-        assert!(
-            !windsurf_symlink.exists(),
-            "Windsurf symlink should be removed"
-        );
-
-        // Verify second file symlinks still exist
-        assert!(
-            cursor_symlink2.exists(),
-            "Cursor symlink 2 should still exist"
-        );
-        assert!(
-            windsurf_symlink2.exists(),
-            "Windsurf symlink 2 should still exist"
-        );
-
-        // Shutdown daemon
-        shutdown_tx.send(()).unwrap();
-
-        // Wait for daemon to finish
-        let daemon_result = daemon_handle.join().unwrap();
-        assert!(daemon_result.is_ok(), "Daemon should complete successfully");
+        assert_eq!(fs::read_to_string(&cursor_symlink1).unwrap(), "Test content 1");
+        assert_eq!(fs::read_to_string(&cursor_symlink2).unwrap(), "Test content 2");
+        assert_eq!(fs::read_to_string(&windsurf_symlink1).unwrap(), "Test content 1");
+        assert_eq!(fs::read_to_string(&windsurf_symlink2).unwrap(), "Test content 2");
     }
 
     #[test]
-    #[serial_test::serial]
-    fn test_single_instance_enforcement() {
+    fn test_handle_file_event_with_multiple_directories() {
+        use std::collections::HashMap;
+
         let dir1 = tempdir().unwrap();
         let dir2 = tempdir().unwrap();
 
-        // Create .rules directories in both
+        // Create .rules directories
         let rules_path1 = dir1.path().join(RULES_DIR);
         let rules_path2 = dir2.path().join(RULES_DIR);
         fs::create_dir(&rules_path1).unwrap();
         fs::create_dir(&rules_path2).unwrap();
 
-        // Create channels for shutdown signals
-        let (shutdown_tx1, shutdown_rx1) = mpsc::channel();
-        let (_shutdown_tx2, shutdown_rx2) = mpsc::channel();
+        // Create target directories
+        let cursor_rules_path1 = dir1.path().join(CURSOR_RULES_DIR);
+        let windsurf_rules_path1 = dir1.path().join(WINDSURF_RULES_DIR);
+        let cursor_rules_path2 = dir2.path().join(CURSOR_RULES_DIR);
+        let windsurf_rules_path2 = dir2.path().join(WINDSURF_RULES_DIR);
+        fs::create_dir_all(&cursor_rules_path1).unwrap();
+        fs::create_dir_all(&windsurf_rules_path1).unwrap();
+        fs::create_dir_all(&cursor_rules_path2).unwrap();
+        fs::create_dir_all(&windsurf_rules_path2).unwrap();
 
-        // Start first daemon instance in dir1
-        let daemon_dir1 = dir1.path().to_path_buf();
-        let daemon_handle1 = thread::spawn(move || start_daemon(daemon_dir1, shutdown_rx1));
+        // Create test files
+        let test_file1 = rules_path1.join("test1.md");
+        let test_file2 = rules_path2.join("test2.md");
+        fs::write(&test_file1, "Test content 1").unwrap();
+        fs::write(&test_file2, "Test content 2").unwrap();
 
-        // Give first daemon time to start and acquire system-wide lock
-        thread::sleep(Duration::from_millis(200));
+        // Create rules paths map
+        let mut rules_paths = HashMap::new();
+        rules_paths.insert(rules_path1.canonicalize().unwrap(), dir1.path().to_path_buf());
+        rules_paths.insert(rules_path2.canonicalize().unwrap(), dir2.path().to_path_buf());
 
-        // Try to start second daemon instance in dir2 - should fail due to system-wide lock
-        let daemon_dir2 = dir2.path().to_path_buf();
-        let daemon_handle2 = thread::spawn(move || start_daemon(daemon_dir2, shutdown_rx2));
+        // Simulate create events for both files
+        let event1 = Event {
+            kind: EventKind::Create(notify::event::CreateKind::File),
+            paths: vec![test_file1.canonicalize().unwrap()],
+            attrs: Default::default(),
+        };
 
-        // Give second daemon time to try to start
-        thread::sleep(Duration::from_millis(200));
+        let event2 = Event {
+            kind: EventKind::Create(notify::event::CreateKind::File),
+            paths: vec![test_file2.canonicalize().unwrap()],
+            attrs: Default::default(),
+        };
 
-        // Check if second daemon failed to start
-        let daemon2_result = daemon_handle2.join().unwrap();
-        assert!(
-            daemon2_result.is_err(),
-            "Second daemon should fail to start due to system-wide lock"
-        );
+        // Handle events
+        handle_file_event(&event1, &rules_paths).unwrap();
+        handle_file_event(&event2, &rules_paths).unwrap();
 
-        // Verify the error is about another instance running
-        let error = daemon2_result.unwrap_err();
-        assert_eq!(error.kind(), io::ErrorKind::AlreadyExists);
+        // Verify symlinks were created in correct directories
+        assert!(cursor_rules_path1.join("test1.md").exists());
+        assert!(windsurf_rules_path1.join("test1.md").exists());
+        assert!(cursor_rules_path2.join("test2.md").exists());
+        assert!(windsurf_rules_path2.join("test2.md").exists());
 
-        // Shutdown first daemon
-        let _ = shutdown_tx1.send(()); // Ignore send error if daemon already exited
-
-        // Wait for first daemon to finish
-        let daemon1_result = daemon_handle1.join().unwrap();
-        assert!(
-            daemon1_result.is_ok(),
-            "First daemon should complete successfully"
-        );
-
-        // Now try to start a third daemon in dir2 - should succeed since first daemon stopped
-        let (shutdown_tx3, shutdown_rx3) = mpsc::channel();
-        let daemon_dir3 = dir2.path().to_path_buf();
-        let daemon_handle3 = thread::spawn(move || start_daemon(daemon_dir3, shutdown_rx3));
-
-        // Give third daemon time to start
-        thread::sleep(Duration::from_millis(200));
-
-        // Shutdown third daemon
-        let _ = shutdown_tx3.send(()); // Ignore send error if daemon already exited
-
-        // Wait for third daemon to finish
-        let daemon3_result = daemon_handle3.join().unwrap();
-        assert!(
-            daemon3_result.is_ok(),
-            "Third daemon should complete successfully"
-        );
+        // Verify symlinks don't exist in wrong directories
+        assert!(!cursor_rules_path1.join("test2.md").exists());
+        assert!(!cursor_rules_path2.join("test1.md").exists());
     }
 
     #[test]
-    fn test_handle_rename_events() {
-        let dir = tempdir().unwrap();
+    #[serial_test::serial]
+    fn test_daemon_no_configured_directories() {
+        // Create empty config
+        let config = Config::new();
+        
+        // Temporarily save empty config for test
+        let original_config = crate::config::load_config().unwrap_or_default();
+        save_config(&config).unwrap();
 
-        // Create .rules directory
-        let rules_path = dir.path().join(RULES_DIR);
-        fs::create_dir(&rules_path).unwrap();
+        // Create channel for shutdown signal
+        let (_shutdown_tx, shutdown_rx) = mpsc::channel();
 
-        // Create target directories
-        let cursor_rules_path = dir.path().join(CURSOR_RULES_DIR);
-        let windsurf_rules_path = dir.path().join(WINDSURF_RULES_DIR);
-        fs::create_dir_all(&cursor_rules_path).unwrap();
-        fs::create_dir_all(&windsurf_rules_path).unwrap();
+        // Start daemon - should complete immediately with no directories
+        let result = start_daemon(shutdown_rx);
+        assert!(result.is_ok(), "Daemon should handle empty config gracefully");
 
-        // Create an initial file and symlinks
-        let old_file = rules_path.join("old_name.txt");
-        fs::write(&old_file, "test content").unwrap();
-
-        let old_cursor_symlink = cursor_rules_path.join("old_name.txt");
-        let old_windsurf_symlink = windsurf_rules_path.join("old_name.txt");
-        create_symlink_to_file(&old_file, &old_cursor_symlink).unwrap();
-        create_symlink_to_file(&old_file, &old_windsurf_symlink).unwrap();
-
-        // Verify initial symlinks exist
-        assert!(
-            old_cursor_symlink.exists(),
-            "Initial cursor symlink should exist"
-        );
-        assert!(
-            old_windsurf_symlink.exists(),
-            "Initial windsurf symlink should exist"
-        );
-
-        // Simulate rename FROM event (old name being removed)
-        let rules_path_canonical = rules_path.canonicalize().unwrap();
-        let old_file_canonical = old_file.canonicalize().unwrap();
-        let from_event = Event {
-            kind: EventKind::Modify(ModifyKind::Name(RenameMode::From)),
-            paths: vec![old_file_canonical],
-            attrs: Default::default(),
-        };
-
-        handle_file_event(
-            &from_event,
-            &rules_path_canonical,
-            &cursor_rules_path,
-            &windsurf_rules_path,
-        )
-        .unwrap();
-
-        // Verify old symlinks are removed
-        assert!(
-            !old_cursor_symlink.exists(),
-            "Old cursor symlink should be removed"
-        );
-        assert!(
-            !old_windsurf_symlink.exists(),
-            "Old windsurf symlink should be removed"
-        );
-
-        // Rename the actual file to simulate the full rename
-        let new_file = rules_path.join("new_name.txt");
-        fs::rename(&old_file, &new_file).unwrap();
-
-        // Simulate rename TO event (new name being created)
-        let new_file_canonical = new_file.canonicalize().unwrap();
-        let to_event = Event {
-            kind: EventKind::Modify(ModifyKind::Name(RenameMode::To)),
-            paths: vec![new_file_canonical],
-            attrs: Default::default(),
-        };
-
-        handle_file_event(
-            &to_event,
-            &rules_path_canonical,
-            &cursor_rules_path,
-            &windsurf_rules_path,
-        )
-        .unwrap();
-
-        // Verify new symlinks are created
-        let new_cursor_symlink = cursor_rules_path.join("new_name.txt");
-        let new_windsurf_symlink = windsurf_rules_path.join("new_name.txt");
-        assert!(
-            new_cursor_symlink.exists(),
-            "New cursor symlink should be created"
-        );
-        assert!(
-            new_windsurf_symlink.exists(),
-            "New windsurf symlink should be created"
-        );
-
-        // Verify symlinks point to correct content
-        let cursor_content = fs::read_to_string(&new_cursor_symlink).unwrap();
-        let windsurf_content = fs::read_to_string(&new_windsurf_symlink).unwrap();
-        assert_eq!(cursor_content, "test content");
-        assert_eq!(windsurf_content, "test content");
+        // Restore original config
+        save_config(&original_config).unwrap();
     }
 }
