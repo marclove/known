@@ -7,9 +7,9 @@ use std::sync::mpsc;
 use crate::config::load_config;
 #[cfg(test)]
 use crate::config::load_config_from_file;
+use crate::constants::RULES_DIR;
 #[cfg(test)]
 use std::collections::HashMap;
-use crate::constants::RULES_DIR;
 
 use super::symlinks::remove_symlinks_from_directory;
 use super::watchers::{setup_directory_watchers, WatcherSetup};
@@ -289,9 +289,13 @@ mod tests {
         // Use canonical paths for comparison to handle symlink differences
         let new_dir_canonical = new_dir.path().canonicalize().unwrap();
         let contains_new_dir = watched_directories.iter().any(|dir| {
-            dir.canonicalize().map_or(false, |canonical| canonical == new_dir_canonical)
+            dir.canonicalize()
+                .map_or(false, |canonical| canonical == new_dir_canonical)
         });
-        assert!(contains_new_dir, "New directory should be in watched directories");
+        assert!(
+            contains_new_dir,
+            "New directory should be in watched directories"
+        );
         assert_eq!(watched_directories.len(), 2);
 
         // Verify the new directory was added to rules_paths
@@ -375,21 +379,28 @@ mod tests {
         // Use canonical paths for comparison to handle symlink differences
         let dir1_canonical = dir1.path().canonicalize().unwrap();
         let dir2_canonical = dir2.path().canonicalize().unwrap();
-        
+
         let contains_dir1 = watched_directories.iter().any(|dir| {
-            dir.canonicalize().map_or(false, |canonical| canonical == dir1_canonical)
+            dir.canonicalize()
+                .map_or(false, |canonical| canonical == dir1_canonical)
         });
         let contains_dir2 = watched_directories.iter().any(|dir| {
-            dir.canonicalize().map_or(false, |canonical| canonical == dir2_canonical)
+            dir.canonicalize()
+                .map_or(false, |canonical| canonical == dir2_canonical)
         });
-        
-        assert!(!contains_dir1, "Dir1 should be removed from watched directories");
+
+        assert!(
+            !contains_dir1,
+            "Dir1 should be removed from watched directories"
+        );
         assert!(contains_dir2, "Dir2 should remain in watched directories");
         assert_eq!(watched_directories.len(), 1);
 
         // Verify dir1 was removed from rules_paths
         let rules_path1_canonical = rules_path1.canonicalize().unwrap();
-        assert!(!watcher_setup.rules_paths.contains_key(&rules_path1_canonical));
+        assert!(!watcher_setup
+            .rules_paths
+            .contains_key(&rules_path1_canonical));
 
         // Verify symlinks were removed from dir1
         assert!(!cursor_rules_path1.join("test1.md").exists());
@@ -435,9 +446,14 @@ mod tests {
         // Use canonical paths for comparison to handle symlink differences
         let dir_canonical = dir.path().canonicalize().unwrap();
         let contains_dir = watched_directories.iter().any(|watched_dir| {
-            watched_dir.canonicalize().map_or(false, |canonical| canonical == dir_canonical)
+            watched_dir
+                .canonicalize()
+                .map_or(false, |canonical| canonical == dir_canonical)
         });
-        assert!(contains_dir, "Directory should remain in watched directories");
+        assert!(
+            contains_dir,
+            "Directory should remain in watched directories"
+        );
         assert_eq!(watched_directories.len(), 1);
     }
 }

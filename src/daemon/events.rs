@@ -371,7 +371,9 @@ mod tests {
 
         // Test metadata modification - should also update symlinks
         let metadata_event = Event {
-            kind: EventKind::Modify(ModifyKind::Metadata(notify::event::MetadataKind::Permissions)),
+            kind: EventKind::Modify(ModifyKind::Metadata(
+                notify::event::MetadataKind::Permissions,
+            )),
             paths: vec![test_file.canonicalize().unwrap()],
             attrs: Default::default(),
         };
@@ -460,7 +462,10 @@ mod tests {
 
         // Create rules paths map with only watched directory
         let mut rules_paths = HashMap::new();
-        rules_paths.insert(rules_path.canonicalize().unwrap(), watched_dir.path().to_path_buf());
+        rules_paths.insert(
+            rules_path.canonicalize().unwrap(),
+            watched_dir.path().to_path_buf(),
+        );
 
         // Create event for file in unwatched directory
         let unwatched_file = unwatched_dir.path().join("test.md");
@@ -479,7 +484,7 @@ mod tests {
         // Verify no symlinks were created in watched directory
         let cursor_rules_path = watched_dir.path().join(CURSOR_RULES_DIR);
         let windsurf_rules_path = watched_dir.path().join(WINDSURF_RULES_DIR);
-        
+
         if cursor_rules_path.exists() {
             assert!(!cursor_rules_path.join("test.md").exists());
         }
@@ -535,7 +540,9 @@ mod tests {
 
         // Test "Access" event type
         let access_event = Event {
-            kind: EventKind::Access(notify::event::AccessKind::Open(notify::event::AccessMode::Read)),
+            kind: EventKind::Access(notify::event::AccessKind::Open(
+                notify::event::AccessMode::Read,
+            )),
             paths: vec![test_file.clone()],
             attrs: Default::default(),
         };
@@ -553,14 +560,14 @@ mod tests {
 
         let mut config = crate::config::Config::new();
         config.add_directory(dir.path().to_path_buf());
-        
+
         let mut watched_directories = config.get_watched_directories().clone();
-        
+
         // Create a mock watcher setup
         let (_tx, rx) = mpsc::channel();
         let mut rules_paths = HashMap::new();
         rules_paths.insert(rules_path.canonicalize().unwrap(), dir.path().to_path_buf());
-        
+
         let watcher_setup = watchers::WatcherSetup {
             watchers: Vec::new(),
             rules_paths,
@@ -579,7 +586,7 @@ mod tests {
             &mut watched_directories,
             watcher_setup,
         );
-        
+
         assert!(result.is_ok());
     }
 
@@ -601,7 +608,7 @@ mod tests {
         // Test non-matching event
         let other_file = temp_dir.path().join("other.json");
         fs::write(&other_file, "{}").unwrap();
-        
+
         let non_matching_event = Event {
             kind: EventKind::Modify(ModifyKind::Data(notify::event::DataChange::Content)),
             paths: vec![other_file],
@@ -615,10 +622,10 @@ mod tests {
     fn test_is_config_file_event_different_directory() {
         let temp_dir1 = tempdir().unwrap();
         let temp_dir2 = tempdir().unwrap();
-        
+
         let config_path1 = temp_dir1.path().join("config.json");
         let config_path2 = temp_dir2.path().join("config.json");
-        
+
         fs::write(&config_path1, "{}").unwrap();
         fs::write(&config_path2, "{}").unwrap();
 

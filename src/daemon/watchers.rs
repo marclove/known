@@ -199,7 +199,7 @@ mod tests {
         fs::write(rules_path.join("test.md"), "content").unwrap();
 
         let nonexistent_dir = PathBuf::from("/this/directory/does/not/exist");
-        
+
         let mut directories = std::collections::HashSet::new();
         directories.insert(existing_dir.path().to_path_buf());
         directories.insert(nonexistent_dir);
@@ -215,8 +215,16 @@ mod tests {
         assert_eq!(rules_paths.len(), 1);
 
         // Verify symlinks were created for existing directory
-        assert!(existing_dir.path().join(CURSOR_RULES_DIR).join("test.md").exists());
-        assert!(existing_dir.path().join(WINDSURF_RULES_DIR).join("test.md").exists());
+        assert!(existing_dir
+            .path()
+            .join(CURSOR_RULES_DIR)
+            .join("test.md")
+            .exists());
+        assert!(existing_dir
+            .path()
+            .join(WINDSURF_RULES_DIR)
+            .join("test.md")
+            .exists());
     }
 
     #[test]
@@ -229,10 +237,12 @@ mod tests {
         // This should return an error since no valid directories exist
         let result = setup_all_watchers(&directories);
         assert!(result.is_err());
-        
+
         if let Err(e) = result {
             assert_eq!(e.kind(), io::ErrorKind::NotFound);
-            assert!(e.to_string().contains("No valid .rules directories found to watch"));
+            assert!(e
+                .to_string()
+                .contains("No valid .rules directories found to watch"));
         }
     }
 
@@ -242,28 +252,28 @@ mod tests {
         let temp_dir = tempdir().unwrap();
         let rules_dir = temp_dir.path().join("project");
         fs::create_dir(&rules_dir).unwrap();
-        
+
         let rules_path = rules_dir.join(RULES_DIR);
         fs::create_dir(&rules_path).unwrap();
-        
+
         // Create a broken symlink inside .rules that will cause issues
         let broken_link = rules_path.join("broken_link");
         #[cfg(unix)]
         {
             std::os::unix::fs::symlink("/nonexistent/target", &broken_link).unwrap();
         }
-        #[cfg(windows)] 
+        #[cfg(windows)]
         {
             std::os::windows::fs::symlink_file("/nonexistent/target", &broken_link).unwrap_or(());
         }
-        
+
         let mut directories = std::collections::HashSet::new();
         directories.insert(rules_dir.clone());
-        
+
         let (tx, _rx) = mpsc::channel();
         let mut watchers = Vec::new();
         let mut rules_paths = HashMap::new();
-        
+
         // This should succeed despite the broken symlink in the directory
         // (canonicalization is done on the directory itself, not contents)
         let result = setup_directory_watchers(&directories, &tx, &mut watchers, &mut rules_paths);
@@ -278,12 +288,12 @@ mod tests {
         let dir = tempdir().unwrap();
         let rules_path = dir.path().join(RULES_DIR);
         fs::create_dir(&rules_path).unwrap();
-        
+
         let mut directories = std::collections::HashSet::new();
         directories.insert(dir.path().to_path_buf());
-        
+
         let watcher_setup = setup_all_watchers(&directories).unwrap();
-        
+
         // Test handling of watch errors by creating a mock error event
         // This simulates the case where Ok(Err(e)) is received from the watcher
         // Since we can't easily inject errors into the real watcher, we'll just verify

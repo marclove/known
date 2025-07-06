@@ -10,11 +10,9 @@ fn test_init_command() {
 
     cmd.current_dir(temp_dir.path()).arg("init");
 
-    cmd.assert()
-        .success()
-        .stdout(predicate::str::contains(
-            "Successfully initialized project with AGENTS.md",
-        ));
+    cmd.assert().success().stdout(predicate::str::contains(
+        "Successfully initialized project with AGENTS.md",
+    ));
 
     assert!(temp_dir.path().join("AGENTS.md").exists());
     assert!(temp_dir.path().join(".rules").exists());
@@ -32,9 +30,9 @@ fn test_add_command() {
         .env("HOME", temp_dir.path())
         .arg("add");
 
-    cmd.assert().success().stdout(predicate::str::contains(
-        "Successfully added",
-    ));
+    cmd.assert()
+        .success()
+        .stdout(predicate::str::contains("Successfully added"));
 }
 
 #[test]
@@ -57,9 +55,9 @@ fn test_remove_command() {
         .env("HOME", temp_dir.path())
         .arg("remove");
 
-    cmd.assert().success().stdout(predicate::str::contains(
-        "Successfully removed",
-    ));
+    cmd.assert()
+        .success()
+        .stdout(predicate::str::contains("Successfully removed"));
 }
 
 #[test]
@@ -74,9 +72,9 @@ fn test_symlink_command() {
         .env("HOME", temp_dir.path())
         .arg("symlink");
 
-    cmd.assert().success().stdout(predicate::str::contains(
-        "Successfully created symlinks",
-    ));
+    cmd.assert()
+        .success()
+        .stdout(predicate::str::contains("Successfully created symlinks"));
 
     assert!(project_dir.join("CLAUDE.md").exists());
     assert!(project_dir.join("GEMINI.md").exists());
@@ -88,7 +86,9 @@ fn test_help_messages() {
     cmd.arg("--help");
     cmd.assert()
         .success()
-        .stdout(predicate::str::contains("A CLI tool for managing project files"))
+        .stdout(predicate::str::contains(
+            "A CLI tool for managing project files",
+        ))
         .stdout(predicate::str::contains("Usage: known <COMMAND>"))
         .stdout(predicate::str::contains("Commands:"))
         .stdout(predicate::str::contains("init"))

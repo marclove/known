@@ -173,9 +173,8 @@ mod tests {
 
         // Start daemon in a separate thread
         let config_clone = config.clone();
-        let handle = std::thread::spawn(move || {
-            start_daemon_with_test_config(shutdown_rx, config_clone)
-        });
+        let handle =
+            std::thread::spawn(move || start_daemon_with_test_config(shutdown_rx, config_clone));
 
         // Give daemon time to start
         std::thread::sleep(Duration::from_millis(100));
@@ -214,7 +213,7 @@ mod tests {
     fn test_daemon_print_watched_directories() {
         let temp_dir1 = tempdir().unwrap();
         let temp_dir2 = tempdir().unwrap();
-        
+
         let mut watched_directories = std::collections::HashSet::new();
         watched_directories.insert(temp_dir1.path().to_path_buf());
         watched_directories.insert(temp_dir2.path().to_path_buf());
@@ -232,7 +231,7 @@ mod tests {
         // Create config file
         let config_dir = tempdir().unwrap();
         let config_path = config_dir.path().join("config.json");
-        
+
         let mut config = crate::config::Config::new();
         config.add_directory(temp_dir.path().to_path_buf());
         crate::config::save_config_to_file(&config, &config_path).unwrap();
@@ -260,7 +259,7 @@ mod tests {
     fn test_daemon_from_invalid_config_file() {
         let temp_dir = tempdir().unwrap();
         let invalid_config_path = temp_dir.path().join("invalid_config.json");
-        
+
         // Create invalid config file
         fs::write(&invalid_config_path, "invalid json").unwrap();
 
@@ -278,7 +277,7 @@ mod tests {
         let temp_dir1 = tempdir().unwrap();
         let temp_dir2 = tempdir().unwrap();
         let temp_dir3 = tempdir().unwrap();
-        
+
         // Create .rules directories
         let rules_path1 = temp_dir1.path().join(crate::constants::RULES_DIR);
         let rules_path2 = temp_dir2.path().join(crate::constants::RULES_DIR);
@@ -301,9 +300,8 @@ mod tests {
 
         // Start daemon in a separate thread
         let config_clone = config.clone();
-        let handle = std::thread::spawn(move || {
-            start_daemon_with_test_config(shutdown_rx, config_clone)
-        });
+        let handle =
+            std::thread::spawn(move || start_daemon_with_test_config(shutdown_rx, config_clone));
 
         // Give daemon time to start
         std::thread::sleep(Duration::from_millis(200));

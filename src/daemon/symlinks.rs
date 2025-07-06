@@ -139,10 +139,26 @@ mod tests {
         // Create target directories and symlinks
         fs::create_dir_all(&cursor_rules_path).unwrap();
         fs::create_dir_all(&windsurf_rules_path).unwrap();
-        create_symlink_to_file(&rules_path.join("test1.md"), &cursor_rules_path.join("test1.md")).unwrap();
-        create_symlink_to_file(&rules_path.join("test2.md"), &cursor_rules_path.join("test2.md")).unwrap();
-        create_symlink_to_file(&rules_path.join("test1.md"), &windsurf_rules_path.join("test1.md")).unwrap();
-        create_symlink_to_file(&rules_path.join("test2.md"), &windsurf_rules_path.join("test2.md")).unwrap();
+        create_symlink_to_file(
+            &rules_path.join("test1.md"),
+            &cursor_rules_path.join("test1.md"),
+        )
+        .unwrap();
+        create_symlink_to_file(
+            &rules_path.join("test2.md"),
+            &cursor_rules_path.join("test2.md"),
+        )
+        .unwrap();
+        create_symlink_to_file(
+            &rules_path.join("test1.md"),
+            &windsurf_rules_path.join("test1.md"),
+        )
+        .unwrap();
+        create_symlink_to_file(
+            &rules_path.join("test2.md"),
+            &windsurf_rules_path.join("test2.md"),
+        )
+        .unwrap();
 
         // Verify symlinks exist
         assert!(cursor_rules_path.join("test1.md").exists());
@@ -167,10 +183,10 @@ mod tests {
     #[test]
     fn test_remove_symlinks_from_directory_nonexistent_directories() {
         let dir = tempdir().unwrap();
-        
+
         // Call remove_symlinks_from_directory on a directory without target directories
         let result = remove_symlinks_from_directory(dir.path());
-        
+
         // Should not error when target directories don't exist
         assert!(result.is_ok());
     }
@@ -211,8 +227,16 @@ mod tests {
         fs::write(windsurf_rules_path.join("file1.md"), "content1").unwrap();
         fs::create_dir(cursor_rules_path.join("subdir")).unwrap();
         fs::create_dir(windsurf_rules_path.join("subdir")).unwrap();
-        fs::write(cursor_rules_path.join("subdir").join("file2.md"), "content2").unwrap();
-        fs::write(windsurf_rules_path.join("subdir").join("file2.md"), "content2").unwrap();
+        fs::write(
+            cursor_rules_path.join("subdir").join("file2.md"),
+            "content2",
+        )
+        .unwrap();
+        fs::write(
+            windsurf_rules_path.join("subdir").join("file2.md"),
+            "content2",
+        )
+        .unwrap();
 
         // Call remove_symlinks_from_directory
         remove_symlinks_from_directory(dir.path()).unwrap();
