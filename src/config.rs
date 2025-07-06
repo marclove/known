@@ -458,4 +458,46 @@ mod tests {
         assert!(config.contains_directory(dirs[3].path()));
         assert!(config.contains_directory(dirs[4].path()));
     }
+
+    #[test]
+    fn test_load_config_malformed_file() {
+        let temp_dir = tempdir().unwrap();
+        let config_path = temp_dir.path().join("config.json");
+
+        // Write malformed JSON to the file
+        fs::write(&config_path, "this is not json").unwrap();
+
+        // Attempt to load the config
+        let result = load_config_from_file(&config_path);
+
+        // Assert that it returns an error
+        assert!(result.is_err());
+        if let Err(e) = result {
+            assert_eq!(e.kind(), io::ErrorKind::InvalidData);
+        }
+    }
+
+    #[test]
+    fn test_save_config_permission_denied() {
+        let temp_dir = tempdir().unwrap();
+
+        // Create a read-only directory
+        let readonly_dir = temp_dir.path().join("readonly");
+        fs::create_dir(&readonly_dir).unwrap();
+        let mut perms = fs::metadata(&readonly_dir).unwrap().permissions();
+        perms.set_readonly(true);
+        fs::set_permissions(&readonly_dir, perms).unwrap();
+
+        let config_path = readonly_dir.join("config.json");
+
+        // Attempt to save the config
+        let config = Config::new();
+        let result = save_config_to_file(&config, &config_path);
+
+        // Assert that it returns an error
+        assert!(result.is_err());
+        if let Err(e) = result {
+            assert_eq!(e.kind(), io::ErrorKind::PermissionDenied);
+        }
+    }
 }
