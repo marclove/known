@@ -29,7 +29,10 @@ The codebase provides the following main functionality:
 1. **`create_agents_file()`** - Creates AGENTS.md files with case-insensitive checks and handles migration from existing CLAUDE.md or GEMINI.md files
 2. **`create_symlinks()`** - Creates symlinks from CLAUDE.md and GEMINI.md to AGENTS.md, and migrates files from .cursor/rules and .windsurf/rules to .rules directory
 3. **`start_daemon()`** - Starts a file watching daemon that monitors .rules directory and maintains synchronized symlinks in .cursor/rules and .windsurf/rules
-4. **Helper functions**:
+4. **`enable_autostart()`** - Enables cross-platform autostart for the daemon using the auto-launch crate
+5. **`disable_autostart()`** - Disables autostart for the daemon
+6. **`is_autostart_enabled()`** - Checks if autostart is currently enabled
+7. **Helper functions**:
    - `ensure_rules_directory_exists()` - Creates .rules directory if it doesn't exist
    - `remove_existing_symlinks()` - Removes existing symlink files before creating new ones
    - `move_files_to_rules_dir()` - Moves files from source directories to .rules with conflict handling
@@ -42,6 +45,9 @@ The codebase provides the following main functionality:
 - `known init` - Initialize project with AGENTS.md file and .rules directory
 - `known symlink` - Create symlinks and migrate rules files from various AI assistant directories
 - `known daemon` - Start daemon to watch .rules directory and maintain symlinks in .cursor/rules and .windsurf/rules
+- `known enable-autostart` - Enable autostart for the daemon
+- `known disable-autostart` - Disable autostart for the daemon
+- `known autostart-status` - Check if autostart is enabled
 
 All functions include comprehensive unit tests using Rust's built-in testing framework with the `tempfile` crate for file system isolation.
 

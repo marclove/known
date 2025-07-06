@@ -1,5 +1,8 @@
 use clap::{Parser, Subcommand};
-use known::{create_agents_file, create_symlinks, start_daemon};
+use known::{
+    create_agents_file, create_symlinks, disable_autostart, enable_autostart, is_autostart_enabled,
+    start_daemon,
+};
 use std::process;
 use std::sync::mpsc;
 
@@ -18,7 +21,17 @@ enum Commands {
     /// Create symlinks from AGENTS.md to CLAUDE.md and GEMINI.md
     Symlink,
     /// Start daemon to watch .rules directory and maintain symlinks
-    Daemon,
+    Daemon {
+        /// Working directory for the daemon (defaults to current directory)
+        #[arg(long, short)]
+        working_dir: Option<String>,
+    },
+    /// Enable autostart for the daemon
+    EnableAutostart,
+    /// Disable autostart for the daemon
+    DisableAutostart,
+    /// Check if autostart is enabled
+    AutostartStatus,
 }
 
 fn main() {
@@ -41,11 +54,12 @@ fn main() {
                 process::exit(1);
             }
         },
-        Commands::Daemon => {
+        Commands::Daemon { working_dir } => {
             // Create a channel for shutdown signal (not used in CLI mode, but required by API)
             let (_shutdown_tx, shutdown_rx) = mpsc::channel();
 
-            match start_daemon(".", shutdown_rx) {
+            let daemon_dir = working_dir.as_deref().unwrap_or(".");
+            match start_daemon(daemon_dir, shutdown_rx) {
                 Ok(()) => println!("Daemon stopped"),
                 Err(e) => {
                     eprintln!("Error running daemon: {}", e);
@@ -53,5 +67,32 @@ fn main() {
                 }
             }
         }
+        Commands::EnableAutostart => match enable_autostart() {
+            Ok(()) => println!("Autostart enabled successfully"),
+            Err(e) => {
+                eprintln!("Error enabling autostart: {}", e);
+                process::exit(1);
+            }
+        },
+        Commands::DisableAutostart => match disable_autostart() {
+            Ok(()) => println!("Autostart disabled successfully"),
+            Err(e) => {
+                eprintln!("Error disabling autostart: {}", e);
+                process::exit(1);
+            }
+        },
+        Commands::AutostartStatus => match is_autostart_enabled() {
+            Ok(enabled) => {
+                if enabled {
+                    println!("Autostart is enabled");
+                } else {
+                    println!("Autostart is disabled");
+                }
+            }
+            Err(e) => {
+                eprintln!("Error checking autostart status: {}", e);
+                process::exit(1);
+            }
+        },
     }
 }

@@ -66,12 +66,37 @@ This command will:
 - Keep the rules directories synchronized with the unified `.rules` directory
 - Run continuously until stopped with Ctrl+C
 
+### Autostart management
+
+Enable the daemon to start automatically when your system boots:
+
+```bash
+known enable-autostart
+```
+
+Disable autostart for the daemon:
+
+```bash
+known disable-autostart
+```
+
+Check if autostart is enabled:
+
+```bash
+known autostart-status
+```
+
+The autostart feature works cross-platform:
+- **Windows**: Uses Windows registry entries
+- **macOS**: Uses Launch Agents 
+- **Linux**: Uses systemd or equivalent service manager
+
 ## Library Usage
 
 You can also use Known as a Rust library:
 
 ```rust
-use known::{create_agents_file, create_symlinks, start_daemon};
+use known::{create_agents_file, create_symlinks, start_daemon, enable_autostart, disable_autostart, is_autostart_enabled};
 
 // Create AGENTS.md file
 create_agents_file()?;
@@ -80,7 +105,16 @@ create_agents_file()?;
 create_symlinks()?;
 
 // Start daemon to watch .rules directory
-start_daemon()?;
+start_daemon(".", rx)?;
+
+// Enable autostart for the daemon
+enable_autostart()?;
+
+// Check if autostart is enabled
+let enabled = is_autostart_enabled()?;
+
+// Disable autostart
+disable_autostart()?;
 ```
 
 ## File Structure
