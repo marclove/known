@@ -62,6 +62,16 @@ pub fn start_daemon(shutdown_rx: mpsc::Receiver<()>) -> io::Result<()> {
     start_daemon_with_config(shutdown_rx, config)
 }
 
+/// Starts the daemon with a configuration from a specific path (for testing)
+#[cfg(test)]
+pub fn start_daemon_from_config_file<P: AsRef<Path>>(
+    shutdown_rx: mpsc::Receiver<()>,
+    config_path: P,
+) -> io::Result<()> {
+    let config = crate::config::load_config_from_file(config_path)?;
+    start_daemon_with_config_no_lock(shutdown_rx, config)
+}
+
 /// Starts a daemon with a custom configuration (for testing)
 /// This version skips the single instance lock to allow parallel testing
 #[cfg(test)]
@@ -900,5 +910,33 @@ mod tests {
             result2.is_ok(),
             "Daemon should handle empty config gracefully"
         );
+    }
+
+    #[test]
+    fn test_start_daemon_with_nonexistent_config() {
+        let temp_dir = tempdir().unwrap();
+        let config_path = temp_dir.path().join("nonexistent_config.json");
+
+        let (_shutdown_tx, shutdown_rx) = mpsc::channel();
+        let result = start_daemon_from_config_file(shutdown_rx, &config_path);
+
+        // Should return Ok, as a non-existent config is treated as an empty config
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_start_daemon_with_malformed_config() {
+        let temp_dir = tempdir().unwrap();
+        let config_path = temp_dir.path().join("malformed_config.json");
+        fs::write(&config_path, "this is not json").unwrap();
+
+        let (_shutdown_tx, shutdown_rx) = mpsc::channel();
+        let result = start_daemon_from_config_file(shutdown_rx, &config_path);
+
+        // Should return an error
+        assert!(result.is_err());
+        if let Err(e) = result {
+            assert_eq!(e.kind(), io::ErrorKind::InvalidData);
+        }
     }
 }
