@@ -6,6 +6,7 @@
 pub mod agents;
 pub mod autostart;
 pub mod config;
+pub mod constants;
 pub mod daemon;
 pub mod single_instance;
 pub mod symlinks;

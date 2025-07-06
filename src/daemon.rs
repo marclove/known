@@ -12,17 +12,9 @@ use std::sync::mpsc;
 use std::time::Duration;
 
 use crate::config::{get_config_file_path, load_config};
+use crate::constants::{CURSOR_RULES_DIR, RULES_DIR, WINDSURF_RULES_DIR};
 use crate::single_instance::SingleInstanceLock;
 use crate::symlinks::create_symlink_to_file;
-
-/// The directory name for rules files
-const RULES_DIR: &str = ".rules";
-
-/// The directory name for cursor rules files
-const CURSOR_RULES_DIR: &str = ".cursor/rules";
-
-/// The directory name for windsurf rules files
-const WINDSURF_RULES_DIR: &str = ".windsurf/rules";
 
 /// Starts a daemon that watches all configured directories for changes
 /// and maintains synchronized symlinks in .cursor/rules and .windsurf/rules directories.

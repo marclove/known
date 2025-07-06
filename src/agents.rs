@@ -4,17 +4,8 @@ use std::fs;
 use std::io;
 use std::path::Path;
 
+use crate::constants::{AGENTS_CONTENTS, AGENTS_FILENAME, CLAUDE_FILENAME, GEMINI_FILENAME};
 use crate::symlinks::ensure_rules_directory_exists;
-
-/// The filename for the agents instruction file (uppercase)
-const AGENTS_FILENAME: &str = "AGENTS.md";
-const AGENTS_CONTENTS: &str = "# AGENTS\nThis file provides guidance to agentic coding agents like [Claude Code](https://claude.ai/code), [Gemini CLI](https://github.com/google-gemini/gemini-cli), and [Codex CLI](https://github.com/openai/codex) when working with code in this repository.";
-
-/// The filename for the claude instruction file (uppercase)
-const CLAUDE_FILENAME: &str = "CLAUDE.md";
-
-/// The filename for the gemini instruction file (uppercase)
-const GEMINI_FILENAME: &str = "GEMINI.md";
 
 /// Creates an AGENTS.md file in the current working directory.
 ///

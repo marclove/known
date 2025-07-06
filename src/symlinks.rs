@@ -5,15 +5,7 @@ use std::io;
 use std::path::Path;
 
 use crate::config::add_directory_to_config;
-
-/// The directory name for rules files
-const RULES_DIR: &str = ".rules";
-
-/// The directory name for cursor rules files
-const CURSOR_RULES_DIR: &str = ".cursor/rules";
-
-/// The directory name for windsurf rules files
-const WINDSURF_RULES_DIR: &str = ".windsurf/rules";
+use crate::constants::{CURSOR_RULES_DIR, RULES_DIR, WINDSURF_RULES_DIR};
 
 /// Creates symbolic links from AGENTS.md to CLAUDE.md and GEMINI.md in the current working directory.
 ///
