@@ -447,6 +447,13 @@ mod tests {
         let err = result.unwrap_err();
         assert_eq!(err.kind(), io::ErrorKind::InvalidData);
         assert!(err.to_string().contains("Invalid PID in lock file"));
+
+        // Test with another invalid content
+        std::fs::write(&test_lock_path, "123a\n").unwrap();
+        let result = stop_daemon_with_test_path(&test_lock_path);
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert_eq!(err.kind(), io::ErrorKind::InvalidData);
     }
 
     #[test]
@@ -464,6 +471,13 @@ mod tests {
         let err = result.unwrap_err();
         assert_eq!(err.kind(), io::ErrorKind::InvalidData);
         assert!(err.to_string().contains("PID file is empty"));
+
+        // Test with a file containing only whitespace
+        std::fs::write(&test_lock_path, "   \n\t").unwrap();
+        let result = stop_daemon_with_test_path(&test_lock_path);
+        assert!(result.is_err());
+        let err = result.unwrap_err();
+        assert_eq!(err.kind(), io::ErrorKind::InvalidData);
     }
 
     #[test]
