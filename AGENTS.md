@@ -71,9 +71,10 @@ All functions include comprehensive unit tests using Rust's built-in testing fra
 3. Verify that the test fails before writing your implementation.
 4. Write the implementation code, always with proper docstrings.
 5. Verify that the test now passes.
-6. Update the ROADMAP.md file.
-7. Review the LESSONS_LEARNED.md file and consider making updates.
-8. Review AGENTS.md and evaluate whether it should be updated.
+6. Check test coverage using `cargo tarpaulin` to ensure adequate test coverage is maintained.
+7. Update the ROADMAP.md file.
+8. Review the LESSONS_LEARNED.md file and consider making updates.
+9. Review AGENTS.md and evaluate whether it should be updated.
 
 ### Backwards Compatibility Policy
 - **Pre-Release Phase**: Since we have not done a public release yet, we do not need to provide backwards compatibility. Breaking changes can be implemented freely to improve the API and architecture without worrying about existing users.
