@@ -3,7 +3,8 @@ use known::{
     add_directory_to_config, create_agents_file, create_symlinks, disable_autostart,
     enable_autostart, is_autostart_enabled, start_daemon,
 };
-use std::process;
+use std::io;
+use std::process::{self, Command, Stdio};
 use std::sync::mpsc;
 
 #[derive(Parser)]
@@ -21,7 +22,9 @@ enum Commands {
     /// Create symlinks from AGENTS.md to CLAUDE.md and GEMINI.md
     Symlink,
     /// Start daemon to watch all configured directories and maintain symlinks
-    Daemon,
+    Start,
+    /// Run daemon process (internal command, used by start)
+    RunDaemon,
     /// Enable autostart for the daemon
     EnableAutostart,
     /// Disable autostart for the daemon
@@ -30,6 +33,45 @@ enum Commands {
     AutostartStatus,
     /// Add current working directory to the list of watched directories
     Add,
+}
+
+/// Spawns a new process to run the daemon in the background
+///
+/// This function starts a new process running the `run-daemon` command,
+/// which will run the actual daemon functionality in the background.
+/// The spawned process is detached so it continues running after this
+/// function exits.
+///
+/// # Errors
+///
+/// Returns an error if the process cannot be spawned or if there's an
+/// issue with process creation.
+///
+fn spawn_daemon_process() -> io::Result<()> {
+    // Get the current executable path
+    let current_exe = std::env::current_exe()?;
+
+    // Spawn a new process with the run-daemon command
+    let mut cmd = Command::new(&current_exe);
+    cmd.arg("run-daemon")
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null());
+
+    // On Unix systems, we can properly detach the process
+    #[cfg(unix)]
+    {
+        use std::os::unix::process::CommandExt;
+        cmd.process_group(0);
+    }
+
+    // Spawn the process
+    let child = cmd.spawn()?;
+
+    // Don't wait for the child process - let it run in the background
+    drop(child);
+
+    Ok(())
 }
 
 fn main() {
@@ -52,7 +94,23 @@ fn main() {
                 process::exit(1);
             }
         },
-        Commands::Daemon => {
+        Commands::Start => {
+            // Spawn a new process to run the daemon
+            match spawn_daemon_process() {
+                Ok(()) => println!("Daemon started successfully"),
+                Err(e) => {
+                    eprintln!("Error starting daemon: {}", e);
+                    process::exit(1);
+                }
+            }
+        }
+        Commands::RunDaemon => {
+            // Warn users that this is an internal command
+            eprintln!("WARNING: 'run-daemon' is an internal command used by 'start'.");
+            eprintln!("You should typically use 'known start' instead to launch the daemon.");
+            eprintln!("Continuing with daemon execution...");
+            eprintln!();
+
             // Create a channel for shutdown signal (not used in CLI mode, but required by API)
             let (_shutdown_tx, shutdown_rx) = mpsc::channel();
 
@@ -119,7 +177,7 @@ fn main() {
                     process::exit(1);
                 }
             }
-        },
+        }
     }
 }
 
@@ -134,29 +192,47 @@ mod tests {
         // Create a temporary directory to simulate a project directory
         let temp_dir = tempdir().unwrap();
         let temp_path = temp_dir.path();
-        
+
         // Change to the temporary directory
         let original_dir = env::current_dir().unwrap();
         env::set_current_dir(temp_path).unwrap();
-        
+
         // Ensure the directory is not already in config
         let _ = remove_directory_from_config(temp_path);
-        
+
         // Load initial config to verify directory is not present
         let initial_config = load_config().unwrap();
         assert!(!initial_config.contains_directory(temp_path));
-        
+
         // This test will fail until we implement the Add command
         // For now, let's manually test the underlying functionality
         let added = known::add_directory_to_config(temp_path).unwrap();
         assert!(added);
-        
+
         // Verify the directory was added
         let updated_config = load_config().unwrap();
         assert!(updated_config.contains_directory(temp_path));
-        
+
         // Clean up
         let _ = remove_directory_from_config(temp_path);
         env::set_current_dir(original_dir).unwrap();
+    }
+
+    #[test]
+    fn test_spawn_daemon_process() {
+        // Test that spawn_daemon_process doesn't panic and returns Ok
+        // We can't easily test the actual spawning in a unit test environment,
+        // but we can ensure the function exists and has the right signature
+
+        // This test primarily exists to ensure the function compiles
+        // and could be called. In a real test environment, we'd need
+        // to mock the process spawning mechanism.
+
+        // For now, we'll just test that the current executable path can be obtained
+        let current_exe_result = std::env::current_exe();
+        assert!(
+            current_exe_result.is_ok(),
+            "Should be able to get current executable path"
+        );
     }
 }

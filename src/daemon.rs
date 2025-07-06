@@ -339,7 +339,7 @@ mod tests {
         // Create .rules directory with test files
         let rules_path = dir.path().join(RULES_DIR);
         fs::create_dir(&rules_path).unwrap();
-        
+
         let test_file1 = rules_path.join("test1.md");
         let test_file2 = rules_path.join("test2.txt");
         fs::write(&test_file1, "Test content 1").unwrap();
@@ -360,14 +360,32 @@ mod tests {
 
         assert!(cursor_symlink1.exists(), "Cursor symlink 1 should exist");
         assert!(cursor_symlink2.exists(), "Cursor symlink 2 should exist");
-        assert!(windsurf_symlink1.exists(), "Windsurf symlink 1 should exist");
-        assert!(windsurf_symlink2.exists(), "Windsurf symlink 2 should exist");
+        assert!(
+            windsurf_symlink1.exists(),
+            "Windsurf symlink 1 should exist"
+        );
+        assert!(
+            windsurf_symlink2.exists(),
+            "Windsurf symlink 2 should exist"
+        );
 
         // Verify symlinks point to correct content
-        assert_eq!(fs::read_to_string(&cursor_symlink1).unwrap(), "Test content 1");
-        assert_eq!(fs::read_to_string(&cursor_symlink2).unwrap(), "Test content 2");
-        assert_eq!(fs::read_to_string(&windsurf_symlink1).unwrap(), "Test content 1");
-        assert_eq!(fs::read_to_string(&windsurf_symlink2).unwrap(), "Test content 2");
+        assert_eq!(
+            fs::read_to_string(&cursor_symlink1).unwrap(),
+            "Test content 1"
+        );
+        assert_eq!(
+            fs::read_to_string(&cursor_symlink2).unwrap(),
+            "Test content 2"
+        );
+        assert_eq!(
+            fs::read_to_string(&windsurf_symlink1).unwrap(),
+            "Test content 1"
+        );
+        assert_eq!(
+            fs::read_to_string(&windsurf_symlink2).unwrap(),
+            "Test content 2"
+        );
     }
 
     #[test]
@@ -401,8 +419,14 @@ mod tests {
 
         // Create rules paths map
         let mut rules_paths = HashMap::new();
-        rules_paths.insert(rules_path1.canonicalize().unwrap(), dir1.path().to_path_buf());
-        rules_paths.insert(rules_path2.canonicalize().unwrap(), dir2.path().to_path_buf());
+        rules_paths.insert(
+            rules_path1.canonicalize().unwrap(),
+            dir1.path().to_path_buf(),
+        );
+        rules_paths.insert(
+            rules_path2.canonicalize().unwrap(),
+            dir2.path().to_path_buf(),
+        );
 
         // Simulate create events for both files
         let event1 = Event {
@@ -437,7 +461,7 @@ mod tests {
     fn test_daemon_no_configured_directories() {
         // Create empty config
         let config = Config::new();
-        
+
         // Temporarily save empty config for test
         let original_config = crate::config::load_config().unwrap_or_default();
         save_config(&config).unwrap();
@@ -447,7 +471,10 @@ mod tests {
 
         // Start daemon - should complete immediately with no directories
         let result = start_daemon(shutdown_rx);
-        assert!(result.is_ok(), "Daemon should handle empty config gracefully");
+        assert!(
+            result.is_ok(),
+            "Daemon should handle empty config gracefully"
+        );
 
         // Restore original config
         save_config(&original_config).unwrap();
