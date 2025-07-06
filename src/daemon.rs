@@ -939,4 +939,214 @@ mod tests {
             assert_eq!(e.kind(), io::ErrorKind::InvalidData);
         }
     }
+
+    #[test]
+    fn test_handle_file_event_rename_operations() {
+        // Test rename operations (RenameMode::From and RenameMode::To)
+        let dir = tempdir().unwrap();
+        let rules_path = dir.path().join(RULES_DIR);
+        fs::create_dir(&rules_path).unwrap();
+
+        // Create target directories
+        let cursor_rules_path = dir.path().join(CURSOR_RULES_DIR);
+        let windsurf_rules_path = dir.path().join(WINDSURF_RULES_DIR);
+        fs::create_dir_all(&cursor_rules_path).unwrap();
+        fs::create_dir_all(&windsurf_rules_path).unwrap();
+
+        // Create initial file and symlinks
+        let test_file = rules_path.join("test.md");
+        fs::write(&test_file, "content").unwrap();
+        create_symlink_to_file(&test_file, &cursor_rules_path.join("test.md")).unwrap();
+        create_symlink_to_file(&test_file, &windsurf_rules_path.join("test.md")).unwrap();
+
+        // Verify initial symlinks exist
+        assert!(cursor_rules_path.join("test.md").exists());
+        assert!(windsurf_rules_path.join("test.md").exists());
+
+        // Create rules paths map
+        let mut rules_paths = HashMap::new();
+        rules_paths.insert(rules_path.canonicalize().unwrap(), dir.path().to_path_buf());
+
+        // Test RenameMode::From - should remove old symlinks
+        let rename_from_event = Event {
+            kind: EventKind::Modify(ModifyKind::Name(RenameMode::From)),
+            paths: vec![test_file.canonicalize().unwrap()],
+            attrs: Default::default(),
+        };
+
+        handle_file_event(&rename_from_event, &rules_paths).unwrap();
+
+        // Verify symlinks were removed
+        assert!(!cursor_rules_path.join("test.md").exists());
+        assert!(!windsurf_rules_path.join("test.md").exists());
+
+        // Test RenameMode::To - should create new symlinks
+        let new_file = rules_path.join("renamed.md");
+        fs::write(&new_file, "content").unwrap();
+
+        let rename_to_event = Event {
+            kind: EventKind::Modify(ModifyKind::Name(RenameMode::To)),
+            paths: vec![new_file.canonicalize().unwrap()],
+            attrs: Default::default(),
+        };
+
+        handle_file_event(&rename_to_event, &rules_paths).unwrap();
+
+        // Verify new symlinks were created
+        assert!(cursor_rules_path.join("renamed.md").exists());
+        assert!(windsurf_rules_path.join("renamed.md").exists());
+    }
+
+    #[test]
+    fn test_handle_file_event_modify_operations() {
+        // Test various modify operations
+        let dir = tempdir().unwrap();
+        let rules_path = dir.path().join(RULES_DIR);
+        fs::create_dir(&rules_path).unwrap();
+
+        // Create target directories
+        let cursor_rules_path = dir.path().join(CURSOR_RULES_DIR);
+        let windsurf_rules_path = dir.path().join(WINDSURF_RULES_DIR);
+        fs::create_dir_all(&cursor_rules_path).unwrap();
+        fs::create_dir_all(&windsurf_rules_path).unwrap();
+
+        // Create test file
+        let test_file = rules_path.join("test.md");
+        fs::write(&test_file, "original content").unwrap();
+
+        // Create rules paths map
+        let mut rules_paths = HashMap::new();
+        rules_paths.insert(rules_path.canonicalize().unwrap(), dir.path().to_path_buf());
+
+        // Test content modification - should create/update symlinks
+        let modify_event = Event {
+            kind: EventKind::Modify(ModifyKind::Data(notify::event::DataChange::Content)),
+            paths: vec![test_file.canonicalize().unwrap()],
+            attrs: Default::default(),
+        };
+
+        handle_file_event(&modify_event, &rules_paths).unwrap();
+
+        // Verify symlinks were created/updated
+        assert!(cursor_rules_path.join("test.md").exists());
+        assert!(windsurf_rules_path.join("test.md").exists());
+
+        // Test metadata modification - should also update symlinks
+        let metadata_event = Event {
+            kind: EventKind::Modify(ModifyKind::Metadata(notify::event::MetadataKind::Permissions)),
+            paths: vec![test_file.canonicalize().unwrap()],
+            attrs: Default::default(),
+        };
+
+        handle_file_event(&metadata_event, &rules_paths).unwrap();
+
+        // Verify symlinks still exist
+        assert!(cursor_rules_path.join("test.md").exists());
+        assert!(windsurf_rules_path.join("test.md").exists());
+
+        // Test modification when file doesn't exist (should be ignored)
+        let nonexistent_file = rules_path.join("nonexistent.md");
+        let modify_nonexistent_event = Event {
+            kind: EventKind::Modify(ModifyKind::Data(notify::event::DataChange::Content)),
+            paths: vec![nonexistent_file.clone()],
+            attrs: Default::default(),
+        };
+
+        // This should not create symlinks since the file doesn't exist
+        handle_file_event(&modify_nonexistent_event, &rules_paths).unwrap();
+        assert!(!cursor_rules_path.join("nonexistent.md").exists());
+        assert!(!windsurf_rules_path.join("nonexistent.md").exists());
+    }
+
+    #[test]
+    fn test_handle_file_event_remove_operations() {
+        // Test file removal
+        let dir = tempdir().unwrap();
+        let rules_path = dir.path().join(RULES_DIR);
+        fs::create_dir(&rules_path).unwrap();
+
+        // Create target directories
+        let cursor_rules_path = dir.path().join(CURSOR_RULES_DIR);
+        let windsurf_rules_path = dir.path().join(WINDSURF_RULES_DIR);
+        fs::create_dir_all(&cursor_rules_path).unwrap();
+        fs::create_dir_all(&windsurf_rules_path).unwrap();
+
+        // Create test file and symlinks
+        let test_file = rules_path.join("test.md");
+        fs::write(&test_file, "content").unwrap();
+        create_symlink_to_file(&test_file, &cursor_rules_path.join("test.md")).unwrap();
+        create_symlink_to_file(&test_file, &windsurf_rules_path.join("test.md")).unwrap();
+
+        // Verify symlinks exist initially
+        assert!(cursor_rules_path.join("test.md").exists());
+        assert!(windsurf_rules_path.join("test.md").exists());
+
+        // Create rules paths map
+        let mut rules_paths = HashMap::new();
+        rules_paths.insert(rules_path.canonicalize().unwrap(), dir.path().to_path_buf());
+
+        // Test file removal - remove event should clean up symlinks
+        let remove_event = Event {
+            kind: EventKind::Remove(notify::event::RemoveKind::File),
+            paths: vec![test_file.canonicalize().unwrap()],
+            attrs: Default::default(),
+        };
+
+        handle_file_event(&remove_event, &rules_paths).unwrap();
+
+        // Verify symlinks were removed
+        assert!(!cursor_rules_path.join("test.md").exists());
+        assert!(!windsurf_rules_path.join("test.md").exists());
+
+        // Test removal of non-existent symlinks (should not error)
+        let nonexistent_file = rules_path.join("nonexistent.md");
+        let remove_nonexistent_event = Event {
+            kind: EventKind::Remove(notify::event::RemoveKind::File),
+            paths: vec![nonexistent_file],
+            attrs: Default::default(),
+        };
+
+        // This should not error even if symlinks don't exist
+        let result = handle_file_event(&remove_nonexistent_event, &rules_paths);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_handle_file_event_ignore_non_watched_directories() {
+        // Test that events outside watched directories are ignored
+        let watched_dir = tempdir().unwrap();
+        let unwatched_dir = tempdir().unwrap();
+
+        let rules_path = watched_dir.path().join(RULES_DIR);
+        fs::create_dir(&rules_path).unwrap();
+
+        // Create rules paths map with only watched directory
+        let mut rules_paths = HashMap::new();
+        rules_paths.insert(rules_path.canonicalize().unwrap(), watched_dir.path().to_path_buf());
+
+        // Create event for file in unwatched directory
+        let unwatched_file = unwatched_dir.path().join("test.md");
+        fs::write(&unwatched_file, "content").unwrap();
+
+        let event = Event {
+            kind: EventKind::Create(notify::event::CreateKind::File),
+            paths: vec![unwatched_file],
+            attrs: Default::default(),
+        };
+
+        // This should not create any symlinks and should not error
+        let result = handle_file_event(&event, &rules_paths);
+        assert!(result.is_ok());
+
+        // Verify no symlinks were created in watched directory
+        let cursor_rules_path = watched_dir.path().join(CURSOR_RULES_DIR);
+        let windsurf_rules_path = watched_dir.path().join(WINDSURF_RULES_DIR);
+        
+        if cursor_rules_path.exists() {
+            assert!(!cursor_rules_path.join("test.md").exists());
+        }
+        if windsurf_rules_path.exists() {
+            assert!(!windsurf_rules_path.join("test.md").exists());
+        }
+    }
 }
