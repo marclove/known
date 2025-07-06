@@ -52,18 +52,35 @@ This command will:
 - Move any files from `.windsurf/rules` to `.rules` directory
 - Skip files that already exist in `.rules` with a user-friendly warning
 
+### Start daemon
+
+Start a file watching daemon to automatically maintain symlinks:
+
+```bash
+known daemon
+```
+
+This command will:
+- Monitor the `.rules` directory for changes
+- Automatically create and maintain symlinks in `.cursor/rules` and `.windsurf/rules`
+- Keep the rules directories synchronized with the unified `.rules` directory
+- Run continuously until stopped with Ctrl+C
+
 ## Library Usage
 
 You can also use Known as a Rust library:
 
 ```rust
-use known::{create_agents_file, create_symlinks};
+use known::{create_agents_file, create_symlinks, start_daemon};
 
 // Create AGENTS.md file
 create_agents_file()?;
 
 // Create symlinks to AGENTS.md
 create_symlinks()?;
+
+// Start daemon to watch .rules directory
+start_daemon()?;
 ```
 
 ## File Structure
