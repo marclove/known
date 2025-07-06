@@ -9,6 +9,7 @@ use std::path::Path;
 
 /// The filename for the agents instruction file (uppercase)
 const AGENTS_FILENAME: &str = "AGENTS.md";
+const AGENTS_CONTENTS: &str = "# AGENTS\nThis file provides guidance to agentic coding agents like [Claude Code](https://claude.ai/code), [Gemini CLI](https://github.com/google-gemini/gemini-cli), and [Codex CLI](https://github.com/openai/codex) when working with code in this repository.";
 
 /// The filename for the claude instruction file (uppercase)
 #[allow(dead_code)]
@@ -118,7 +119,7 @@ pub fn create_agents_file_in_dir<P: AsRef<Path>>(dir: P) -> io::Result<()> {
         }
         (None, None) => {
             // Neither exists
-            fs::write(agents_path, "")?;
+            fs::write(agents_path, AGENTS_CONTENTS)?;
         }
     }
 
@@ -142,7 +143,7 @@ mod tests {
         assert!(agents_path.exists());
 
         let content = fs::read_to_string(&agents_path).unwrap();
-        assert_eq!(content, "");
+        assert_eq!(content, AGENTS_CONTENTS);
 
         // Test idempotency
         let result_second = create_agents_file_in_dir(dir.path());
