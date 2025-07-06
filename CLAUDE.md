@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-This is a Rust library project named "known" using Rust 2021 edition. The library provides functionality for creating an empty AGENTS.md file in the current working directory if it doesn't already exist (case-insensitive check).
+This is a Rust library project named "known" using Rust 2021 edition. The library provides functionality for managing agentic LLM instruction files and project rules directories. It creates and manages AGENTS.md files with automatic migration from CLAUDE.md and GEMINI.md files, creates symlinks for compatibility, and manages rules directories for various AI coding assistants.
 
 ## Common Commands
 
@@ -19,9 +19,26 @@ This is a Rust library project named "known" using Rust 2021 edition. The librar
 
 The project follows standard Rust library structure:
 - `src/lib.rs` - Main library file containing public functions and tests
+- `src/main.rs` - CLI interface using clap for command-line argument parsing
 - `Cargo.toml` - Project configuration and dependencies
 
-The codebase currently contains a `create_agents_file()` function that checks for existing agents.md files (case-insensitive) and creates an empty AGENTS.md file if none exists. The function includes comprehensive unit tests using Rust's built-in testing framework.
+### Core Functions
+
+The codebase provides the following main functionality:
+
+1. **`create_agents_file()`** - Creates AGENTS.md files with case-insensitive checks and handles migration from existing CLAUDE.md or GEMINI.md files
+2. **`create_symlinks()`** - Creates symlinks from CLAUDE.md and GEMINI.md to AGENTS.md, and migrates files from .cursor/rules and .windsurf/rules to .rules directory
+3. **Helper functions**:
+   - `ensure_rules_directory_exists()` - Creates .rules directory if it doesn't exist
+   - `remove_existing_symlinks()` - Removes existing symlink files before creating new ones
+   - `move_files_to_rules_dir()` - Moves files from source directories to .rules with conflict handling
+
+### CLI Commands
+
+- `known init` - Initialize project with AGENTS.md file and .rules directory
+- `known symlink` - Create symlinks and migrate rules files from various AI assistant directories
+
+All functions include comprehensive unit tests using Rust's built-in testing framework with the `tempfile` crate for file system isolation.
 
 ## Development Guidelines
 
