@@ -23,6 +23,7 @@ The project follows standard Rust library structure:
 - `src/agents.rs` - AGENTS.md file creation and migration functionality
 - `src/autostart.rs` - Cross-platform autostart management
 - `src/config.rs` - Configuration file management for tracking watched directories
+- `src/constants.rs` - Shared constants used throughout the application
 - `src/daemon.rs` - File watching daemon with single instance enforcement
 - `src/single_instance.rs` - PID file locking for single instance enforcement
 - `src/symlinks.rs` - Symlink creation and rules directory management
@@ -58,6 +59,7 @@ The codebase provides the following main functionality:
 - `known symlink` - Create symlinks and migrate rules files from various AI assistant directories; automatically adds the directory to configuration for daemon tracking
 - `known start` - Start daemon that watches all configured directories from the configuration file and maintains symlinks in .cursor/rules and .windsurf/rules
 - `known run-daemon` - Internal command used by `start` to actually run the daemon process (users should use `start` instead)
+- `known stop` - Stop the daemon process
 - `known enable-autostart` - Enable autostart for the daemon
 - `known disable-autostart` - Disable autostart for the daemon
 - `known autostart-status` - Check if autostart is enabled
@@ -87,6 +89,7 @@ All functions include comprehensive unit tests using Rust's built-in testing fra
 - **Edit/Replace Tool Usage**: When using string replacement tools, always read the file first to see exact formatting (whitespace, line endings, indentation). Use the Read tool with specific line ranges or offsets to identify the precise text to replace. If replacement fails, examine the exact characters around the target text - often the issue is mismatched whitespace or line ending characters. For large functions, consider breaking changes into smaller, more targeted replacements rather than attempting to replace entire function bodies at once.
 
 ### Testing Standards
+- **Integration Tests**: For CLI commands and end-to-end workflows, we use integration tests in the `tests` directory. These tests execute the compiled binary and assert its behavior, providing a robust safety net against regressions in user-facing functionality. Refer to our `TEST_COVERAGE.md` for our full testing coverage strategy.
 - **Unit Tests**: Use unit tests for comprehensive testing of individual functions, testing private functions, edge cases, and complex logic validation. Unit tests should be isolated and use temporary directories for file system operations.
 - **Doctests**: Only use doctests for documentation examples that users will copy-paste from your public API. Doctests should run by default to ensure documentation examples actually work.
 - **Avoid `no_run` Doctests**: The `no_run` attribute should be rare and only used when examples can't run in the test environment (network access, user input, etc.). For file system operations with side effects, prefer unit tests over doctests.
