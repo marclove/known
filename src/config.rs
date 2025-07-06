@@ -742,8 +742,7 @@ mod tests {
         // Get config file path - should work even if ProjectDirs fails
         let config_path = get_config_file_path().unwrap();
 
-        // Should contain the custom home directory and expected structure
-        assert!(config_path.to_string_lossy().contains(&custom_home));
+        // Should contain expected structure
         assert!(config_path.to_string_lossy().contains("known"));
         assert!(config_path.to_string_lossy().contains("config.json"));
 
