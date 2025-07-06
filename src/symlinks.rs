@@ -91,17 +91,9 @@ pub fn create_symlinks_in_dir<P: AsRef<Path>>(dir: P) -> io::Result<()> {
     remove_existing_symlinks(&claude_path, &gemini_path)?;
 
     // Create symlinks using platform-specific functions
-    #[cfg(unix)]
-    {
-        std::os::unix::fs::symlink("AGENTS.md", &claude_path)?;
-        std::os::unix::fs::symlink("AGENTS.md", &gemini_path)?;
-    }
-
-    #[cfg(windows)]
-    {
-        std::os::windows::fs::symlink_file("AGENTS.md", &claude_path)?;
-        std::os::windows::fs::symlink_file("AGENTS.md", &gemini_path)?;
-    }
+    let agents_symlink_target = Path::new("AGENTS.md");
+    create_platform_symlink(agents_symlink_target, &claude_path)?;
+    create_platform_symlink(agents_symlink_target, &gemini_path)?;
 
     // Add directory to configuration file for daemon tracking
     if let Err(e) = add_directory_to_config(dir) {
@@ -201,6 +193,31 @@ fn move_files_to_rules_dir<P: AsRef<Path>>(source_dir: P, target_dir: P) -> io::
     Ok(())
 }
 
+/// Creates a platform-specific symlink.
+///
+/// # Arguments
+///
+/// * `source` - Path to the source file
+/// * `target` - Path where the symlink should be created
+///
+/// # Errors
+///
+/// Returns an error if symlink creation fails
+///
+fn create_platform_symlink(source: &Path, target: &Path) -> io::Result<()> {
+    #[cfg(unix)]
+    {
+        std::os::unix::fs::symlink(source, target)?;
+    }
+
+    #[cfg(windows)]
+    {
+        std::os::windows::fs::symlink_file(source, target)?;
+    }
+
+    Ok(())
+}
+
 /// Creates a symlink from target to source file.
 ///
 /// # Arguments
@@ -219,17 +236,7 @@ pub fn create_symlink_to_file(source: &Path, target: &Path) -> io::Result<()> {
     }
 
     // Create platform-specific symlink
-    #[cfg(unix)]
-    {
-        std::os::unix::fs::symlink(source, target)?;
-    }
-
-    #[cfg(windows)]
-    {
-        std::os::windows::fs::symlink_file(source, target)?;
-    }
-
-    Ok(())
+    create_platform_symlink(source, target)
 }
 
 #[cfg(test)]
