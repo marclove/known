@@ -5,6 +5,7 @@ jobs:
   test:
     name: coverage
     runs-on: ubuntu-latest
+    environment: default
     container:
       image: xd009642/tarpaulin:develop-nightly
       options: --security-opt seccomp=unconfined
