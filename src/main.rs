@@ -1,5 +1,5 @@
 use clap::{Parser, Subcommand};
-use known::create_agents_file;
+use known::{create_agents_file, create_symlinks};
 use std::process;
 
 #[derive(Parser)]
@@ -14,6 +14,8 @@ struct Cli {
 enum Commands {
     /// Initialize project by creating AGENTS.md file
     Init,
+    /// Create symlinks from AGENTS.md to CLAUDE.md and GEMINI.md
+    Symlink,
 }
 
 fn main() {
@@ -24,6 +26,15 @@ fn main() {
             Ok(()) => println!("Successfully initialized project with AGENTS.md"),
             Err(e) => {
                 eprintln!("Error creating AGENTS.md: {}", e);
+                process::exit(1);
+            }
+        },
+        Commands::Symlink => match create_symlinks() {
+            Ok(()) => println!(
+                "Successfully created symlinks: CLAUDE.md and GEMINI.md now point to AGENTS.md"
+            ),
+            Err(e) => {
+                eprintln!("Error creating symlinks: {}", e);
                 process::exit(1);
             }
         },

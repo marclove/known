@@ -19,6 +19,88 @@ const CLAUDE_FILENAME: &str = "CLAUDE.md";
 #[allow(dead_code)]
 const GEMINI_FILENAME: &str = "GEMINI.md";
 
+/// Creates symbolic links from AGENTS.md to CLAUDE.md and GEMINI.md in the current working directory.
+///
+/// This function creates symlinks that point from CLAUDE.md and GEMINI.md to AGENTS.md,
+/// allowing users to maintain compatibility with both naming conventions.
+///
+/// # Behavior
+///
+/// - If AGENTS.md doesn't exist, returns an error
+/// - Creates symlinks from CLAUDE.md and GEMINI.md to AGENTS.md
+/// - Overwrites existing symlinks if they already exist
+/// - On Windows, creates file symlinks; on Unix, creates regular symlinks
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - AGENTS.md doesn't exist in the current directory
+/// - Symlink creation fails due to permissions or other OS-level issues
+///
+pub fn create_symlinks() -> io::Result<()> {
+    let current_dir = std::env::current_dir()?;
+    create_symlinks_in_dir(&current_dir)
+}
+
+/// Creates symbolic links from AGENTS.md to CLAUDE.md and GEMINI.md in the specified directory.
+///
+/// This is the core function that handles symlink creation logic.
+///
+/// # Arguments
+///
+/// * `dir` - The directory path where the symlinks should be created
+///
+/// # Behavior
+///
+/// - Verifies that AGENTS.md exists in the target directory
+/// - Creates symlinks from CLAUDE.md and GEMINI.md to AGENTS.md
+/// - Uses platform-specific symlink functions for cross-platform compatibility
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - AGENTS.md doesn't exist in the target directory
+/// - Symlink creation fails
+///
+pub fn create_symlinks_in_dir<P: AsRef<Path>>(dir: P) -> io::Result<()> {
+    let dir = dir.as_ref();
+    let agents_path = dir.join(AGENTS_FILENAME);
+
+    // Check if AGENTS.md exists
+    if !agents_path.exists() {
+        return Err(io::Error::new(
+            io::ErrorKind::NotFound,
+            "AGENTS.md file not found. Please run 'known init' first.",
+        ));
+    }
+
+    let claude_path = dir.join(CLAUDE_FILENAME);
+    let gemini_path = dir.join(GEMINI_FILENAME);
+
+    // Remove existing symlinks if they exist
+    if claude_path.exists() {
+        fs::remove_file(&claude_path)?;
+    }
+    if gemini_path.exists() {
+        fs::remove_file(&gemini_path)?;
+    }
+
+    // Create symlinks using platform-specific functions
+    #[cfg(unix)]
+    {
+        std::os::unix::fs::symlink(AGENTS_FILENAME, &claude_path)?;
+        std::os::unix::fs::symlink(AGENTS_FILENAME, &gemini_path)?;
+    }
+
+    #[cfg(windows)]
+    {
+        std::os::windows::fs::symlink_file(AGENTS_FILENAME, &claude_path)?;
+        std::os::windows::fs::symlink_file(AGENTS_FILENAME, &gemini_path)?;
+    }
+
+    Ok(())
+}
+
 /// Helper function to convert filename to lowercase for case-insensitive comparisons
 fn to_lowercase(filename: &str) -> String {
     filename.to_lowercase()
@@ -222,5 +304,73 @@ mod tests {
 
         let content = fs::read_to_string(&agents_path).unwrap();
         assert_eq!(content, "");
+    }
+
+    #[test]
+    fn test_create_symlinks_success() {
+        let dir = tempdir().unwrap();
+
+        // First create an AGENTS.md file
+        let agents_path = dir.path().join(AGENTS_FILENAME);
+        fs::write(&agents_path, "# Agents content").unwrap();
+
+        // Create symlinks
+        let result = create_symlinks_in_dir(dir.path());
+        assert!(result.is_ok());
+
+        // Check that symlinks were created
+        let claude_path = dir.path().join(CLAUDE_FILENAME);
+        let gemini_path = dir.path().join(GEMINI_FILENAME);
+
+        assert!(claude_path.exists());
+        assert!(gemini_path.exists());
+
+        // Verify symlinks point to correct content
+        let claude_content = fs::read_to_string(&claude_path).unwrap();
+        let gemini_content = fs::read_to_string(&gemini_path).unwrap();
+        let agents_content = fs::read_to_string(&agents_path).unwrap();
+
+        assert_eq!(claude_content, agents_content);
+        assert_eq!(gemini_content, agents_content);
+        assert_eq!(claude_content, "# Agents content");
+    }
+
+    #[test]
+    fn test_create_symlinks_no_agents_file() {
+        let dir = tempdir().unwrap();
+
+        // Try to create symlinks without AGENTS.md
+        let result = create_symlinks_in_dir(dir.path());
+        assert!(result.is_err());
+
+        let error = result.unwrap_err();
+        assert_eq!(error.kind(), io::ErrorKind::NotFound);
+        assert!(error.to_string().contains("AGENTS.md file not found"));
+    }
+
+    #[test]
+    fn test_create_symlinks_overwrites_existing() {
+        let dir = tempdir().unwrap();
+
+        // Create AGENTS.md file
+        let agents_path = dir.path().join(AGENTS_FILENAME);
+        fs::write(&agents_path, "# Agents content").unwrap();
+
+        // Create existing files that will be overwritten
+        let claude_path = dir.path().join(CLAUDE_FILENAME);
+        let gemini_path = dir.path().join(GEMINI_FILENAME);
+        fs::write(&claude_path, "# Old Claude content").unwrap();
+        fs::write(&gemini_path, "# Old Gemini content").unwrap();
+
+        // Create symlinks (should overwrite existing files)
+        let result = create_symlinks_in_dir(dir.path());
+        assert!(result.is_ok());
+
+        // Verify symlinks point to AGENTS.md content
+        let claude_content = fs::read_to_string(&claude_path).unwrap();
+        let gemini_content = fs::read_to_string(&gemini_path).unwrap();
+
+        assert_eq!(claude_content, "# Agents content");
+        assert_eq!(gemini_content, "# Agents content");
     }
 }
