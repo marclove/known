@@ -56,7 +56,8 @@ The codebase provides the following main functionality:
 
 - `known init` - Initialize project with AGENTS.md file and .rules directory
 - `known symlink` - Create symlinks and migrate rules files from various AI assistant directories; automatically adds the directory to configuration for daemon tracking
-- `known daemon` - Start daemon that watches all configured directories from the configuration file and maintains symlinks in .cursor/rules and .windsurf/rules
+- `known start` - Start daemon that watches all configured directories from the configuration file and maintains symlinks in .cursor/rules and .windsurf/rules
+- `known run-daemon` - Internal command used by `start` to actually run the daemon process (users should use `start` instead)
 - `known enable-autostart` - Enable autostart for the daemon
 - `known disable-autostart` - Disable autostart for the daemon
 - `known autostart-status` - Check if autostart is enabled
