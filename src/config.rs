@@ -199,6 +199,103 @@ pub fn remove_directory_from_config<P: AsRef<Path>>(dir_path: P) -> io::Result<b
     Ok(removed)
 }
 
+/// Loads configuration from a specific file path (for testing)
+///
+/// # Arguments
+///
+/// * `config_path` - Path to the configuration file
+///
+/// # Errors
+///
+/// Returns an error if file reading or JSON parsing fails
+pub fn load_config_from_file<P: AsRef<Path>>(config_path: P) -> io::Result<Config> {
+    let config_path = config_path.as_ref();
+    
+    // If config file doesn't exist, return default config
+    if !config_path.exists() {
+        return Ok(Config::default());
+    }
+
+    let config_content = fs::read_to_string(config_path)?;
+    let config: Config = serde_json::from_str(&config_content).map_err(|e| {
+        io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!("Failed to parse configuration file: {}", e),
+        )
+    })?;
+
+    Ok(config)
+}
+
+/// Saves configuration to a specific file path (for testing)
+///
+/// # Arguments
+///
+/// * `config` - The configuration to save
+/// * `config_path` - Path to the configuration file
+///
+/// # Errors
+///
+/// Returns an error if directory creation, JSON serialization, or file writing fails
+pub fn save_config_to_file<P: AsRef<Path>>(config: &Config, config_path: P) -> io::Result<()> {
+    let config_path = config_path.as_ref();
+
+    // Create the configuration directory if it doesn't exist
+    if let Some(parent) = config_path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+
+    let config_content = serde_json::to_string_pretty(config).map_err(|e| {
+        io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!("Failed to serialize configuration: {}", e),
+        )
+    })?;
+
+    fs::write(config_path, config_content)?;
+    Ok(())
+}
+
+/// Adds a directory to a specific configuration file (for testing)
+///
+/// # Arguments
+///
+/// * `dir_path` - Path to the directory to add
+/// * `config_path` - Path to the configuration file
+///
+/// # Errors
+///
+/// Returns an error if loading or saving the configuration fails
+pub fn add_directory_to_config_file<P: AsRef<Path>, C: AsRef<Path>>(
+    dir_path: P,
+    config_path: C,
+) -> io::Result<bool> {
+    let mut config = load_config_from_file(&config_path)?;
+    let added = config.add_directory(dir_path);
+    save_config_to_file(&config, config_path)?;
+    Ok(added)
+}
+
+/// Removes a directory from a specific configuration file (for testing)
+///
+/// # Arguments
+///
+/// * `dir_path` - Path to the directory to remove
+/// * `config_path` - Path to the configuration file
+///
+/// # Errors
+///
+/// Returns an error if loading or saving the configuration fails
+pub fn remove_directory_from_config_file<P: AsRef<Path>, C: AsRef<Path>>(
+    dir_path: P,
+    config_path: C,
+) -> io::Result<bool> {
+    let mut config = load_config_from_file(&config_path)?;
+    let removed = config.remove_directory(dir_path);
+    save_config_to_file(&config, config_path)?;
+    Ok(removed)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

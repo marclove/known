@@ -11,7 +11,7 @@ use std::path::{Path, PathBuf};
 use std::sync::mpsc;
 use std::time::Duration;
 
-use crate::config::load_config;
+use crate::config::{get_config_file_path, load_config};
 use crate::single_instance::SingleInstanceLock;
 use crate::symlinks::create_symlink_to_file;
 
@@ -95,9 +95,9 @@ fn start_daemon_with_config(
 /// Internal function that handles the daemon logic without acquiring a lock (for testing)
 fn start_daemon_with_config_no_lock(
     shutdown_rx: mpsc::Receiver<()>,
-    config: crate::config::Config,
+    mut config: crate::config::Config,
 ) -> io::Result<()> {
-    let watched_directories = config.get_watched_directories();
+    let mut watched_directories = config.get_watched_directories().clone();
 
     if watched_directories.is_empty() {
         println!("No directories configured to watch. Use 'known symlink' in project directories to add them.");
@@ -108,7 +108,7 @@ fn start_daemon_with_config_no_lock(
         "Watching {} directories for changes:",
         watched_directories.len()
     );
-    for dir in watched_directories {
+    for dir in &watched_directories {
         println!("  - {}", dir.display());
     }
 
@@ -119,47 +119,22 @@ fn start_daemon_with_config_no_lock(
     // Set up file watchers for each directory
     let (tx, rx) = mpsc::channel();
 
-    for dir in watched_directories {
-        let rules_path = dir.join(RULES_DIR);
-
-        // Skip if .rules directory doesn't exist
-        if !rules_path.exists() {
-            println!(
-                "Warning: .rules directory not found at {}, skipping",
-                rules_path.display()
-            );
-            continue;
+    // Watch the configuration file for changes
+    let config_file_path = get_config_file_path()?;
+    let mut config_watcher = RecommendedWatcher::new(tx.clone(), Config::default())
+        .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+    
+    if let Some(config_parent) = config_file_path.parent() {
+        if config_parent.exists() {
+            config_watcher
+                .watch(config_parent, RecursiveMode::NonRecursive)
+                .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+            println!("Watching configuration file for changes: {}", config_file_path.display());
         }
-
-        // Canonicalize rules path to handle symlinks properly
-        let rules_path_canonical = rules_path.canonicalize()?;
-        rules_paths.insert(rules_path_canonical.clone(), dir.clone());
-
-        // Create target directories if they don't exist
-        let cursor_rules_path = dir.join(CURSOR_RULES_DIR);
-        let windsurf_rules_path = dir.join(WINDSURF_RULES_DIR);
-
-        if let Some(parent) = cursor_rules_path.parent() {
-            fs::create_dir_all(parent)?;
-        }
-        if let Some(parent) = windsurf_rules_path.parent() {
-            fs::create_dir_all(parent)?;
-        }
-
-        // Create initial symlinks for existing files
-        sync_rules_directory(&rules_path, &cursor_rules_path, &windsurf_rules_path)?;
-
-        // Create watcher for this directory
-        let mut watcher = RecommendedWatcher::new(tx.clone(), Config::default())
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
-
-        // Watch the .rules directory
-        watcher
-            .watch(&rules_path, RecursiveMode::NonRecursive)
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
-
-        watchers.push(watcher);
     }
+
+    // Set up watchers for initial directories
+    setup_directory_watchers(&watched_directories, &tx, &mut watchers, &mut rules_paths)?;
 
     if watchers.is_empty() {
         return Err(io::Error::new(
@@ -184,7 +159,12 @@ fn start_daemon_with_config_no_lock(
         // Check for file system events (with timeout)
         match rx.recv_timeout(Duration::from_millis(100)) {
             Ok(Ok(event)) => {
-                if let Err(e) = handle_file_event(&event, &rules_paths) {
+                // Check if this is a config file change
+                if is_config_file_event(&event, &config_file_path) {
+                    if let Err(e) = handle_config_file_change(&mut config, &mut watched_directories, &tx, &mut watchers, &mut rules_paths) {
+                        eprintln!("Error handling config file change: {}", e);
+                    }
+                } else if let Err(e) = handle_file_event(&event, &rules_paths) {
                     eprintln!("Error handling file event: {}", e);
                 }
             }
@@ -352,6 +332,134 @@ fn sync_rules_directory(
     Ok(())
 }
 
+/// Sets up watchers for the given directories
+fn setup_directory_watchers(
+    directories: &std::collections::HashSet<PathBuf>,
+    tx: &mpsc::Sender<Result<Event, notify::Error>>,
+    watchers: &mut Vec<RecommendedWatcher>,
+    rules_paths: &mut HashMap<PathBuf, PathBuf>,
+) -> io::Result<()> {
+    for dir in directories {
+        let rules_path = dir.join(RULES_DIR);
+
+        // Skip if .rules directory doesn't exist
+        if !rules_path.exists() {
+            println!(
+                "Warning: .rules directory not found at {}, skipping",
+                rules_path.display()
+            );
+            continue;
+        }
+
+        // Canonicalize rules path to handle symlinks properly
+        let rules_path_canonical = rules_path.canonicalize()?;
+        rules_paths.insert(rules_path_canonical.clone(), dir.clone());
+
+        // Create target directories if they don't exist
+        let cursor_rules_path = dir.join(CURSOR_RULES_DIR);
+        let windsurf_rules_path = dir.join(WINDSURF_RULES_DIR);
+
+        if let Some(parent) = cursor_rules_path.parent() {
+            fs::create_dir_all(parent)?;
+        }
+        if let Some(parent) = windsurf_rules_path.parent() {
+            fs::create_dir_all(parent)?;
+        }
+
+        // Create initial symlinks for existing files
+        sync_rules_directory(&rules_path, &cursor_rules_path, &windsurf_rules_path)?;
+
+        // Create watcher for this directory
+        let mut watcher = RecommendedWatcher::new(tx.clone(), Config::default())
+            .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+
+        // Watch the .rules directory
+        watcher
+            .watch(&rules_path, RecursiveMode::NonRecursive)
+            .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+
+        watchers.push(watcher);
+    }
+    Ok(())
+}
+
+/// Checks if the file event is related to the configuration file
+fn is_config_file_event(event: &Event, config_file_path: &Path) -> bool {
+    event.paths.iter().any(|path| {
+        path.file_name() == config_file_path.file_name() && 
+        path.parent() == config_file_path.parent()
+    })
+}
+
+/// Handles configuration file changes by updating watched directories
+fn handle_config_file_change(
+    config: &mut crate::config::Config,
+    watched_directories: &mut std::collections::HashSet<PathBuf>,
+    tx: &mpsc::Sender<Result<Event, notify::Error>>,
+    watchers: &mut Vec<RecommendedWatcher>,
+    rules_paths: &mut HashMap<PathBuf, PathBuf>,
+) -> io::Result<()> {
+    println!("Configuration file changed, reloading...");
+    
+    // Load new configuration
+    let new_config = match load_config() {
+        Ok(config) => config,
+        Err(e) => {
+            eprintln!("Failed to reload configuration: {}", e);
+            return Ok(()); // Don't fail the daemon, just log the error
+        }
+    };
+    
+    let new_watched_directories = new_config.get_watched_directories().clone();
+    
+    // Find directories that were added
+    let added_directories: std::collections::HashSet<_> = new_watched_directories
+        .difference(watched_directories)
+        .collect();
+    
+    // Find directories that were removed
+    let removed_directories: std::collections::HashSet<_> = watched_directories
+        .difference(&new_watched_directories)
+        .collect();
+    
+    if !added_directories.is_empty() {
+        println!("Adding {} new directories to watch:", added_directories.len());
+        for dir in &added_directories {
+            println!("  + {}", dir.display());
+        }
+        
+        // Add watchers for new directories
+        let added_dirs_set: std::collections::HashSet<PathBuf> = added_directories.into_iter().cloned().collect();
+        if let Err(e) = setup_directory_watchers(&added_dirs_set, tx, watchers, rules_paths) {
+            eprintln!("Failed to setup watchers for new directories: {}", e);
+        }
+    }
+    
+    if !removed_directories.is_empty() {
+        println!("Removing {} directories from watch:", removed_directories.len());
+        for dir in &removed_directories {
+            println!("  - {}", dir.display());
+        }
+        
+        // Remove watchers and rules_paths entries for removed directories
+        // Note: We can't easily remove specific watchers from the Vec without tracking them individually,
+        // but since removed directories won't match in rules_paths anymore, events will be ignored
+        for removed_dir in &removed_directories {
+            let rules_path = removed_dir.join(RULES_DIR);
+            if let Ok(canonical_path) = rules_path.canonicalize() {
+                rules_paths.remove(&canonical_path);
+            }
+        }
+    }
+    
+    // Update our local state
+    *config = new_config;
+    *watched_directories = new_watched_directories;
+    
+    println!("Configuration reloaded successfully. Now watching {} directories.", watched_directories.len());
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -496,5 +604,69 @@ mod tests {
             result.is_ok(),
             "Daemon should handle empty config gracefully"
         );
+    }
+
+    #[test]
+    fn test_is_config_file_event() {
+        let config_path = Path::new("/home/user/.config/known/config.json");
+        
+        // Test event that matches config file
+        let matching_event = Event {
+            kind: EventKind::Modify(ModifyKind::Data(notify::event::DataChange::Content)),
+            paths: vec![config_path.to_path_buf()],
+            attrs: Default::default(),
+        };
+        
+        assert!(is_config_file_event(&matching_event, config_path));
+        
+        // Test event that doesn't match config file
+        let non_matching_event = Event {
+            kind: EventKind::Modify(ModifyKind::Data(notify::event::DataChange::Content)),
+            paths: vec![Path::new("/some/other/file.txt").to_path_buf()],
+            attrs: Default::default(),
+        };
+        
+        assert!(!is_config_file_event(&non_matching_event, config_path));
+    }
+
+    #[test]
+    fn test_setup_directory_watchers() {
+        let dir1 = tempdir().unwrap();
+        let dir2 = tempdir().unwrap();
+        
+        // Create .rules directories
+        let rules_path1 = dir1.path().join(RULES_DIR);
+        let rules_path2 = dir2.path().join(RULES_DIR);
+        fs::create_dir(&rules_path1).unwrap();
+        fs::create_dir(&rules_path2).unwrap();
+        
+        // Create test files
+        fs::write(rules_path1.join("test1.md"), "content1").unwrap();
+        fs::write(rules_path2.join("test2.md"), "content2").unwrap();
+        
+        // Create directory set
+        let mut directories = std::collections::HashSet::new();
+        directories.insert(dir1.path().to_path_buf());
+        directories.insert(dir2.path().to_path_buf());
+        
+        // Set up watchers
+        let (tx, _rx) = mpsc::channel();
+        let mut watchers = Vec::new();
+        let mut rules_paths = HashMap::new();
+        
+        let result = setup_directory_watchers(&directories, &tx, &mut watchers, &mut rules_paths);
+        assert!(result.is_ok(), "Should successfully set up watchers");
+        
+        // Verify watchers were created
+        assert_eq!(watchers.len(), 2, "Should have 2 watchers");
+        
+        // Verify rules_paths contains both directories
+        assert_eq!(rules_paths.len(), 2, "Should track 2 rules paths");
+        
+        // Verify symlinks were created
+        assert!(dir1.path().join(CURSOR_RULES_DIR).join("test1.md").exists());
+        assert!(dir1.path().join(WINDSURF_RULES_DIR).join("test1.md").exists());
+        assert!(dir2.path().join(CURSOR_RULES_DIR).join("test2.md").exists());
+        assert!(dir2.path().join(WINDSURF_RULES_DIR).join("test2.md").exists());
     }
 }

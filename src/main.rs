@@ -228,39 +228,32 @@ fn main() {
 
 #[cfg(test)]
 mod tests {
-    use known::{load_config, remove_directory_from_config};
-    use std::env;
+    use known::{add_directory_to_config_file, load_config_from_file, remove_directory_from_config_file};
     use tempfile::tempdir;
 
     #[test]
     fn test_add_command_acceptance() {
-        // Create a temporary directory to simulate a project directory
-        let temp_dir = tempdir().unwrap();
-        let temp_path = temp_dir.path();
-
-        // Change to the temporary directory
-        let original_dir = env::current_dir().unwrap();
-        env::set_current_dir(temp_path).unwrap();
-
-        // Ensure the directory is not already in config
-        let _ = remove_directory_from_config(temp_path);
+        // Create temporary directories for both the project and config
+        let project_dir = tempdir().unwrap();
+        let config_dir = tempdir().unwrap();
+        let project_path = project_dir.path();
+        let config_path = config_dir.path().join("test_config.json");
 
         // Load initial config to verify directory is not present
-        let initial_config = load_config().unwrap();
-        assert!(!initial_config.contains_directory(temp_path));
+        let initial_config = load_config_from_file(&config_path).unwrap();
+        assert!(!initial_config.contains_directory(project_path));
 
-        // This test will fail until we implement the Add command
-        // For now, let's manually test the underlying functionality
-        let added = known::add_directory_to_config(temp_path).unwrap();
+        // Test the underlying functionality
+        let added = add_directory_to_config_file(project_path, &config_path).unwrap();
         assert!(added);
 
         // Verify the directory was added
-        let updated_config = load_config().unwrap();
-        assert!(updated_config.contains_directory(temp_path));
+        let updated_config = load_config_from_file(&config_path).unwrap();
+        assert!(updated_config.contains_directory(project_path));
 
-        // Clean up
-        let _ = remove_directory_from_config(temp_path);
-        env::set_current_dir(original_dir).unwrap();
+        // Test that adding the same directory again returns false
+        let added_again = add_directory_to_config_file(project_path, &config_path).unwrap();
+        assert!(!added_again);
     }
 
     #[test]
@@ -323,34 +316,36 @@ mod tests {
 
     #[test]
     fn test_remove_command_acceptance() {
-        // Create a temporary directory to simulate a project directory
-        let temp_dir = tempdir().unwrap();
-        let temp_path = temp_dir.path();
+        // Create temporary directories for both the project and config
+        let project_dir = tempdir().unwrap();
+        let config_dir = tempdir().unwrap();
+        let project_path = project_dir.path();
+        let config_path = config_dir.path().join("test_config.json");
 
         // Add the directory to config first
-        let added = known::add_directory_to_config(temp_path).unwrap();
+        let added = add_directory_to_config_file(project_path, &config_path).unwrap();
         assert!(added, "Directory should be added to config");
 
         // Verify it's in the config
-        let config = load_config().unwrap();
+        let config = load_config_from_file(&config_path).unwrap();
         assert!(
-            config.contains_directory(temp_path),
+            config.contains_directory(project_path),
             "Directory should be in config"
         );
 
         // Now test removing it
-        let removed = known::remove_directory_from_config(temp_path).unwrap();
+        let removed = remove_directory_from_config_file(project_path, &config_path).unwrap();
         assert!(removed, "Directory should be removed from config");
 
         // Verify it's no longer in config
-        let updated_config = load_config().unwrap();
+        let updated_config = load_config_from_file(&config_path).unwrap();
         assert!(
-            !updated_config.contains_directory(temp_path),
+            !updated_config.contains_directory(project_path),
             "Directory should not be in config after removal"
         );
 
         // Test removing a directory that's not in config
-        let not_removed = known::remove_directory_from_config(temp_path).unwrap();
+        let not_removed = remove_directory_from_config_file(project_path, &config_path).unwrap();
         assert!(
             !not_removed,
             "Removing directory not in config should return false"

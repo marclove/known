@@ -16,3 +16,4 @@
 - [x] Rename the `daemon` task to `start` and rather run as the daemon itself, it starts the long-running daemon process and exits.
 - [x] Add a CLI task called `stop` which gets the PID of the daemon process and makes it gracefully exit. If the daemon is not running, it fails gracefully and writes an easy to understand notification to STDOUT.
 - [x] Add a CLI task named `remove` for removing the current directory from the list of watched directories. If the application wasn't watching the directory, it fails gracefully and writes an easy to understand notification to STDOUT.
+- [x] Update the daemon to watch the configuration file for any changes. If a directory is added, it starts watching the added directory.

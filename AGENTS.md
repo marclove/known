@@ -82,6 +82,9 @@ All functions include comprehensive unit tests using Rust's built-in testing fra
 ### Code Quality Standards
 - **String Constants**: Extract repeated string literals into typed constants using `const NAME: &str = "value"` following `SCREAMING_SNAKE_CASE` naming conventions. This provides compile-time type checking and maintainability.
 
+### Tool Usage Best Practices
+- **Edit/Replace Tool Usage**: When using string replacement tools, always read the file first to see exact formatting (whitespace, line endings, indentation). Use the Read tool with specific line ranges or offsets to identify the precise text to replace. If replacement fails, examine the exact characters around the target text - often the issue is mismatched whitespace or line ending characters. For large functions, consider breaking changes into smaller, more targeted replacements rather than attempting to replace entire function bodies at once.
+
 ### Testing Standards
 - **Unit Tests**: Use unit tests for comprehensive testing of individual functions, testing private functions, edge cases, and complex logic validation. Unit tests should be isolated and use temporary directories for file system operations.
 - **Doctests**: Only use doctests for documentation examples that users will copy-paste from your public API. Doctests should run by default to ensure documentation examples actually work.

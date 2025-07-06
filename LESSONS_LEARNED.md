@@ -26,6 +26,6 @@
 - **Test Separation**: Keep acceptance tests (using real system functions) separate from unit tests (using isolated test functions) to prevent cross-contamination
 - **Test Naming Convention**: Use clear naming to distinguish between isolated unit tests and system integration tests (e.g., `test_stop_daemon_no_pid_file` vs `test_stop_command_acceptance`)
 - **Multiple Test Verification**: Run tests multiple times consecutively to verify stability after fixing parallel execution issues
-- **Global State Isolation**: Tests that modify global state (like configuration files) should use isolated test-specific functions. Create variants that accept parameters (config, file paths) instead of reading from global state
+- **Global State Isolation**: Tests that modify global state (like configuration files) should use isolated test-specific functions. Create variants that accept parameters (config, file paths) instead of reading from global state. Example: instead of using `add_directory_to_config()` which modifies the system config, create `add_directory_to_config_file(dir_path, config_path)` for tests to use with temporary config files
 - **Lock Contention**: System-wide locks (like `SingleInstanceLock::acquire()`) can cause parallel test failures. Provide lock-free test variants for unit testing the core logic without the locking mechanism
 - **Eliminating serial_test**: By properly isolating global state access, tests can run in parallel without `#[serial_test::serial]` annotations, improving test performance and reducing dependencies
