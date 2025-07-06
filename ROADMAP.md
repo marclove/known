@@ -18,3 +18,4 @@
 - [x] Add a CLI task named `remove` for removing the current directory from the list of watched directories. If the application wasn't watching the directory, it fails gracefully and writes an easy to understand notification to STDOUT.
 - [x] Update the daemon to watch the configuration file for any changes. If a directory is added, it starts watching the added directory.
 - [x] If a directory is removed from the configuration file, the active daemon stops watching the added directory and removes the symlinks in that particular watched directory.
+- [x] Add a `list` CLI command that prints the list of watched directories from the config file.

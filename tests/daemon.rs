@@ -263,10 +263,18 @@ fn test_daemon_multiple_projects() {
         std::fs::create_dir_all(project).unwrap();
         std::fs::create_dir_all(project.join(".rules")).unwrap();
         std::fs::write(project.join("AGENTS.md"), "# Test Project").unwrap();
-        
+
         // Ensure directory exists and is accessible
-        assert!(project.exists(), "Project directory should exist: {}", project.display());
-        assert!(project.is_dir(), "Project path should be a directory: {}", project.display());
+        assert!(
+            project.exists(),
+            "Project directory should exist: {}",
+            project.display()
+        );
+        assert!(
+            project.is_dir(),
+            "Project path should be a directory: {}",
+            project.display()
+        );
 
         // Add project to configuration
         let mut add_cmd = Command::cargo_bin("known").unwrap();

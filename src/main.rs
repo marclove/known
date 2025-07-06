@@ -47,6 +47,8 @@ enum Commands {
     },
     /// Stop the daemon process
     Stop,
+    /// List all watched directories from the configuration file
+    List,
 }
 
 /// Spawns a new process to run the daemon in the background
@@ -238,6 +240,23 @@ fn main() {
                 }
             }
         },
+        Commands::List => match known::load_config() {
+            Ok(config) => {
+                let directories = config.get_watched_directories();
+                if directories.is_empty() {
+                    println!("No directories are currently being watched");
+                } else {
+                    println!("Watched directories:");
+                    for dir in directories {
+                        println!("  {}", dir.display());
+                    }
+                }
+            }
+            Err(e) => {
+                eprintln!("Error loading configuration: {}", e);
+                process::exit(1);
+            }
+        },
     }
 }
 
@@ -329,6 +348,44 @@ mod tests {
 
         // Test passes if we reach this point without panicking
         assert!(true, "stop_daemon function executed without panicking");
+    }
+
+    #[test]
+    fn test_list_command_acceptance() {
+        // Create temporary directories for both the project and config
+        let project_dir1 = tempdir().unwrap();
+        let project_dir2 = tempdir().unwrap();
+        let config_dir = tempdir().unwrap();
+        let project_path1 = project_dir1.path();
+        let project_path2 = project_dir2.path();
+        let config_path = config_dir.path().join("test_config.json");
+
+        // Test with empty config (no directories)
+        let config = load_config_from_file(&config_path).unwrap();
+        assert_eq!(config.directory_count(), 0);
+        assert!(config.get_watched_directories().is_empty());
+
+        // Add directories to config
+        let added1 = add_directory_to_config_file(project_path1, &config_path).unwrap();
+        assert!(added1);
+        let added2 = add_directory_to_config_file(project_path2, &config_path).unwrap();
+        assert!(added2);
+
+        // Test that both directories are now in the config
+        let updated_config = load_config_from_file(&config_path).unwrap();
+        assert_eq!(updated_config.directory_count(), 2);
+        assert!(updated_config.contains_directory(project_path1));
+        assert!(updated_config.contains_directory(project_path2));
+
+        // Verify get_watched_directories returns both directories
+        let watched_dirs = updated_config.get_watched_directories();
+        assert_eq!(watched_dirs.len(), 2);
+        assert!(watched_dirs
+            .iter()
+            .any(|d| d.ends_with(project_path1.file_name().unwrap())));
+        assert!(watched_dirs
+            .iter()
+            .any(|d| d.ends_with(project_path2.file_name().unwrap())));
     }
 
     #[test]

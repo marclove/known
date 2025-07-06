@@ -26,7 +26,6 @@ fn build_auto_launch() -> io::Result<AutoLaunch> {
         )
     })?;
 
-
     AutoLaunchBuilder::new()
         .set_app_name(APP_NAME)
         .set_app_path(current_exe.to_str().ok_or_else(|| {

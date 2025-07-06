@@ -72,6 +72,7 @@ The codebase provides the following main functionality:
 - `known stop` - Stop the daemon process
 - `known add [DIRECTORY]` - Add current working directory (or specified directory) to the list of watched directories
 - `known remove [DIRECTORY]` - Remove current working directory (or specified directory) from the list of watched directories
+- `known list` - List all directories currently being watched by the daemon
 - `known enable-autostart` - Enable autostart for the daemon
 - `known disable-autostart` - Disable autostart for the daemon
 - `known autostart-status` - Check if autostart is enabled

@@ -75,6 +75,14 @@ known remove [DIRECTORY]
 
 If no directory is specified, the current working directory is used.
 
+List all directories currently being watched:
+
+```bash
+known list
+```
+
+This command displays all directories that are currently configured to be watched by the daemon.
+
 ### Start daemon
 
 Start a file watching daemon to automatically maintain symlinks:
