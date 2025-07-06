@@ -480,24 +480,30 @@ mod tests {
     #[test]
     fn test_save_config_permission_denied() {
         let temp_dir = tempdir().unwrap();
-
-        // Create a read-only directory
         let readonly_dir = temp_dir.path().join("readonly");
         fs::create_dir(&readonly_dir).unwrap();
-        let mut perms = fs::metadata(&readonly_dir).unwrap().permissions();
-        perms.set_readonly(true);
-        fs::set_permissions(&readonly_dir, perms).unwrap();
+
+        if cfg!(unix) {
+            use std::os::unix::fs::PermissionsExt;
+            let perms = fs::Permissions::from_mode(0o555);
+            fs::set_permissions(&readonly_dir, perms).unwrap();
+        } else {
+            let mut perms = fs::metadata(&readonly_dir).unwrap().permissions();
+            perms.set_readonly(true);
+            fs::set_permissions(&readonly_dir, perms).unwrap();
+        }
 
         let config_path = readonly_dir.join("config.json");
-
-        // Attempt to save the config
         let config = Config::new();
         let result = save_config_to_file(&config, &config_path);
 
-        // Assert that it returns an error
-        assert!(result.is_err());
-        if let Err(e) = result {
-            assert_eq!(e.kind(), io::ErrorKind::PermissionDenied);
+        if cfg!(unix) {
+            assert!(result.is_err());
+            assert_eq!(result.unwrap_err().kind(), io::ErrorKind::PermissionDenied);
+        } else {
+            if let Err(e) = result {
+                assert_eq!(e.kind(), io::ErrorKind::PermissionDenied);
+            }
         }
     }
 }

@@ -476,14 +476,25 @@ mod tests {
         let agents_path = readonly_dir.join("AGENTS.md");
         fs::write(&agents_path, "test").unwrap();
 
-        let mut perms = fs::metadata(&readonly_dir).unwrap().permissions();
-        perms.set_readonly(true);
-        fs::set_permissions(&readonly_dir, perms).unwrap();
+        if cfg!(unix) {
+            use std::os::unix::fs::PermissionsExt;
+            let perms = fs::Permissions::from_mode(0o555);
+            fs::set_permissions(&readonly_dir, perms).unwrap();
+        } else {
+            let mut perms = fs::metadata(&readonly_dir).unwrap().permissions();
+            perms.set_readonly(true);
+            fs::set_permissions(&readonly_dir, perms).unwrap();
+        }
 
         let result = create_symlinks_in_dir(&readonly_dir);
-        assert!(result.is_err());
-        if let Err(e) = result {
-            assert_eq!(e.kind(), io::ErrorKind::PermissionDenied);
+
+        if cfg!(unix) {
+            assert!(result.is_err());
+            assert_eq!(result.unwrap_err().kind(), io::ErrorKind::PermissionDenied);
+        } else {
+            if let Err(e) = result {
+                assert_eq!(e.kind(), io::ErrorKind::PermissionDenied);
+            }
         }
     }
 }
