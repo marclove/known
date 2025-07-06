@@ -1,0 +1,1 @@
+Now take a moment to think through what happened. Come up with a list of theories about why the tests failed. It should be a detailed and comprehensive list. Then I want you to go through each theory to test it out. Keep track of this list so that we don't repeat ourselves and take a systematic approach to the problem.
