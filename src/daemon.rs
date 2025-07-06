@@ -1,6 +1,9 @@
 //! File watching daemon functionality for managing symlinks in rules directories.
 
-use notify::{Config, Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher};
+use notify::{
+    event::{ModifyKind, RenameMode},
+    Config, Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher,
+};
 use std::fs;
 use std::io;
 use std::path::Path;
@@ -162,12 +165,44 @@ fn handle_file_event(
         let windsurf_target = windsurf_rules_path.join(file_name);
 
         match event.kind {
-            EventKind::Create(_) | EventKind::Modify(_) => {
-                // Create or update symlinks
+            EventKind::Create(_) => {
+                // Create symlinks for new files
                 if path.is_file() {
                     create_symlink_to_file(path, &cursor_target)?;
                     create_symlink_to_file(path, &windsurf_target)?;
                     println!("Created symlinks for {}", file_name.to_string_lossy());
+                }
+            }
+            EventKind::Modify(ModifyKind::Name(RenameMode::From)) => {
+                // File is being renamed FROM this name - remove old symlinks
+                if cursor_target.exists() {
+                    fs::remove_file(&cursor_target)?;
+                }
+                if windsurf_target.exists() {
+                    fs::remove_file(&windsurf_target)?;
+                }
+                println!(
+                    "Removed symlinks for renamed file {}",
+                    file_name.to_string_lossy()
+                );
+            }
+            EventKind::Modify(ModifyKind::Name(RenameMode::To)) => {
+                // File is being renamed TO this name - create new symlinks
+                if path.is_file() {
+                    create_symlink_to_file(path, &cursor_target)?;
+                    create_symlink_to_file(path, &windsurf_target)?;
+                    println!(
+                        "Created symlinks for renamed file {}",
+                        file_name.to_string_lossy()
+                    );
+                }
+            }
+            EventKind::Modify(_) => {
+                // Other modifications (content changes, metadata) - update symlinks if file exists
+                if path.is_file() {
+                    create_symlink_to_file(path, &cursor_target)?;
+                    create_symlink_to_file(path, &windsurf_target)?;
+                    println!("Updated symlinks for {}", file_name.to_string_lossy());
                 }
             }
             EventKind::Remove(_) => {
@@ -321,5 +356,104 @@ mod tests {
         // Wait for daemon to finish
         let daemon_result = daemon_handle.join().unwrap();
         assert!(daemon_result.is_ok(), "Daemon should complete successfully");
+    }
+
+    #[test]
+    fn test_handle_rename_events() {
+        let dir = tempdir().unwrap();
+
+        // Create .rules directory
+        let rules_path = dir.path().join(RULES_DIR);
+        fs::create_dir(&rules_path).unwrap();
+
+        // Create target directories
+        let cursor_rules_path = dir.path().join(CURSOR_RULES_DIR);
+        let windsurf_rules_path = dir.path().join(WINDSURF_RULES_DIR);
+        fs::create_dir_all(&cursor_rules_path).unwrap();
+        fs::create_dir_all(&windsurf_rules_path).unwrap();
+
+        // Create an initial file and symlinks
+        let old_file = rules_path.join("old_name.txt");
+        fs::write(&old_file, "test content").unwrap();
+
+        let old_cursor_symlink = cursor_rules_path.join("old_name.txt");
+        let old_windsurf_symlink = windsurf_rules_path.join("old_name.txt");
+        create_symlink_to_file(&old_file, &old_cursor_symlink).unwrap();
+        create_symlink_to_file(&old_file, &old_windsurf_symlink).unwrap();
+
+        // Verify initial symlinks exist
+        assert!(
+            old_cursor_symlink.exists(),
+            "Initial cursor symlink should exist"
+        );
+        assert!(
+            old_windsurf_symlink.exists(),
+            "Initial windsurf symlink should exist"
+        );
+
+        // Simulate rename FROM event (old name being removed)
+        let rules_path_canonical = rules_path.canonicalize().unwrap();
+        let old_file_canonical = old_file.canonicalize().unwrap();
+        let from_event = Event {
+            kind: EventKind::Modify(ModifyKind::Name(RenameMode::From)),
+            paths: vec![old_file_canonical],
+            attrs: Default::default(),
+        };
+
+        handle_file_event(
+            &from_event,
+            &rules_path_canonical,
+            &cursor_rules_path,
+            &windsurf_rules_path,
+        )
+        .unwrap();
+
+        // Verify old symlinks are removed
+        assert!(
+            !old_cursor_symlink.exists(),
+            "Old cursor symlink should be removed"
+        );
+        assert!(
+            !old_windsurf_symlink.exists(),
+            "Old windsurf symlink should be removed"
+        );
+
+        // Rename the actual file to simulate the full rename
+        let new_file = rules_path.join("new_name.txt");
+        fs::rename(&old_file, &new_file).unwrap();
+
+        // Simulate rename TO event (new name being created)
+        let new_file_canonical = new_file.canonicalize().unwrap();
+        let to_event = Event {
+            kind: EventKind::Modify(ModifyKind::Name(RenameMode::To)),
+            paths: vec![new_file_canonical],
+            attrs: Default::default(),
+        };
+
+        handle_file_event(
+            &to_event,
+            &rules_path_canonical,
+            &cursor_rules_path,
+            &windsurf_rules_path,
+        )
+        .unwrap();
+
+        // Verify new symlinks are created
+        let new_cursor_symlink = cursor_rules_path.join("new_name.txt");
+        let new_windsurf_symlink = windsurf_rules_path.join("new_name.txt");
+        assert!(
+            new_cursor_symlink.exists(),
+            "New cursor symlink should be created"
+        );
+        assert!(
+            new_windsurf_symlink.exists(),
+            "New windsurf symlink should be created"
+        );
+
+        // Verify symlinks point to correct content
+        let cursor_content = fs::read_to_string(&new_cursor_symlink).unwrap();
+        let windsurf_content = fs::read_to_string(&new_windsurf_symlink).unwrap();
+        assert_eq!(cursor_content, "test content");
+        assert_eq!(windsurf_content, "test content");
     }
 }

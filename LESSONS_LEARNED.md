@@ -18,3 +18,4 @@
 - The `notify` crate requires proper path matching - use `path.starts_with(canonical_path)` for reliable event filtering
 - File creation events often generate multiple events (Create, Modify metadata, Modify content) - handle all relevant event types
 - Use `RecursiveMode::NonRecursive` when only watching direct files in a directory, not subdirectories
+- **File Rename Handling**: `EventKind::Modify(_)` is NOT the same as `EventKind::Create(_)` - file renames generate two separate events: `Modify(ModifyKind::Name(RenameMode::From))` for the old name and `Modify(ModifyKind::Name(RenameMode::To))` for the new name. Handle them differently: remove symlinks for `From` events and create symlinks for `To` events to avoid stale symlinks
