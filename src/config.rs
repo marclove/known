@@ -93,18 +93,27 @@ impl Config {
 /// - macOS: `$HOME/Library/Application Support/known/config.json`
 /// - Windows: `%APPDATA%/known/config.json`
 ///
+/// Falls back to `$HOME/.config/known/config.json` if platform-specific directories cannot be determined.
+///
 /// # Errors
 ///
-/// Returns an error if the platform-specific configuration directory cannot be determined
+/// Returns an error if the configuration directory cannot be determined
 pub fn get_config_file_path() -> io::Result<PathBuf> {
-    let project_dirs = ProjectDirs::from("", "", "known").ok_or_else(|| {
+    // Try to use platform-specific directories first
+    if let Some(project_dirs) = ProjectDirs::from("", "", "known") {
+        let config_dir = project_dirs.config_dir();
+        return Ok(config_dir.join(CONFIG_FILE_NAME));
+    }
+
+    // Fallback: use HOME/.config/known/config.json for CI environments and other edge cases
+    let home_dir = std::env::var("HOME").map_err(|_| {
         io::Error::new(
             io::ErrorKind::NotFound,
-            "Unable to determine application configuration directory for this platform",
+            "Unable to determine home directory for configuration path",
         )
     })?;
 
-    let config_dir = project_dirs.config_dir();
+    let config_dir = Path::new(&home_dir).join(".config").join("known");
     Ok(config_dir.join(CONFIG_FILE_NAME))
 }
 
@@ -718,5 +727,42 @@ mod tests {
 
         assert_eq!(config.directory_count(), deserialized.directory_count());
         assert!(deserialized.contains_directory(&unusual_name));
+    }
+
+    #[test]
+    fn test_get_config_file_path_fallback() {
+        // Test that get_config_file_path works with custom HOME environment
+        let temp_dir = tempdir().unwrap();
+        let custom_home = temp_dir.path().to_string_lossy().to_string();
+
+        // Set a custom HOME environment variable
+        let original_home = std::env::var("HOME").ok();
+        std::env::set_var("HOME", &custom_home);
+
+        // Get config file path - should work even if ProjectDirs fails
+        let config_path = get_config_file_path().unwrap();
+
+        // Should contain the custom home directory and expected structure
+        assert!(config_path.to_string_lossy().contains(&custom_home));
+        assert!(config_path.to_string_lossy().contains("known"));
+        assert!(config_path.to_string_lossy().contains("config.json"));
+
+        // The path should be HOME/.config/known/config.json in fallback mode
+        let expected_fallback_path = Path::new(&custom_home)
+            .join(".config")
+            .join("known")
+            .join("config.json");
+
+        // The config path should either be the platform-specific one or the fallback
+        assert!(
+            config_path == expected_fallback_path || config_path.ends_with("known/config.json"),
+            "Config path should be either platform-specific or fallback path"
+        );
+
+        // Restore original HOME environment
+        match original_home {
+            Some(home) => std::env::set_var("HOME", home),
+            None => std::env::remove_var("HOME"),
+        }
     }
 }

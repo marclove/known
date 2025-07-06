@@ -51,7 +51,10 @@ fn test_remove_command() {
     std::fs::create_dir_all(&config_dir).unwrap();
 
     // Verify project directory exists before testing
-    assert!(project_dir.exists(), "Project directory should exist before running add command");
+    assert!(
+        project_dir.exists(),
+        "Project directory should exist before running add command"
+    );
 
     // First, add the directory
     let mut add_cmd = Command::cargo_bin("known").unwrap();
