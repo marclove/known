@@ -81,3 +81,42 @@ fn test_symlink_command() {
     assert!(project_dir.join("CLAUDE.md").exists());
     assert!(project_dir.join("GEMINI.md").exists());
 }
+
+#[test]
+fn test_help_messages() {
+    let mut cmd = Command::cargo_bin("known").unwrap();
+    cmd.arg("--help");
+    cmd.assert()
+        .success()
+        .stdout(predicate::str::contains("A CLI tool for managing project files"))
+        .stdout(predicate::str::contains("Usage: known <COMMAND>"))
+        .stdout(predicate::str::contains("Commands:"))
+        .stdout(predicate::str::contains("init"))
+        .stdout(predicate::str::contains("symlink"))
+        .stdout(predicate::str::contains("add"))
+        .stdout(predicate::str::contains("remove"));
+
+    let mut cmd = Command::cargo_bin("known").unwrap();
+    cmd.arg("init").arg("--help");
+    cmd.assert()
+        .success()
+        .stdout(predicate::str::contains("Usage: known init"));
+
+    let mut cmd = Command::cargo_bin("known").unwrap();
+    cmd.arg("add").arg("--help");
+    cmd.assert()
+        .success()
+        .stdout(predicate::str::contains("Usage: known add"));
+
+    let mut cmd = Command::cargo_bin("known").unwrap();
+    cmd.arg("remove").arg("--help");
+    cmd.assert()
+        .success()
+        .stdout(predicate::str::contains("Usage: known remove"));
+
+    let mut cmd = Command::cargo_bin("known").unwrap();
+    cmd.arg("symlink").arg("--help");
+    cmd.assert()
+        .success()
+        .stdout(predicate::str::contains("Usage: known symlink"));
+}
