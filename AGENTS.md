@@ -1,10 +1,10 @@
-# CLAUDE.md
+# AGENTS.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository. This is the place for documenting our product requirements and development guidelines.
+This file provides guidance to agentic coding agents like [Claude Code](https://claude.ai/code), [Gemini CLI](https://github.com/google-gemini/gemini-cli), and [Codex CLI](https://github.com/openai/codex) when working with code in this repository. This is the place for documenting our product requirements and development guidelines.
 
 ## Project Overview
 
-This is a Rust library project named "known" using Rust 2021 edition. The library provides functionality for managing agentic LLM instruction files and project rules directories. It creates and manages AGENTS.md files with automatic migration from CLAUDE.md and GEMINI.md files, creates symlinks for compatibility, and manages rules directories for various AI coding assistants.
+"known" is a Rust library that provides functionality for managing agentic LLM instruction files and project rules directories. It creates and manages AGENTS.md files with automatic migration from CLAUDE.md and GEMINI.md files, creates symlinks for compatibility, and manages rules directories for various AI coding assistants.
 
 ## Common Commands
 
@@ -54,7 +54,7 @@ All functions include comprehensive unit tests using Rust's built-in testing fra
 5. Verify that the test now passes.
 6. Update the ROADMAP.md file.
 7. Review the LESSONS_LEARNED.md file and consider making updates.
-8. Review CLAUDE.md and evaluate whether it should be updated.
+8. Review AGENTS.md and evaluate whether it should be updated.
 
 ### Code Quality Standards
 - **String Constants**: Extract repeated string literals into typed constants using `const NAME: &str = "value"` following `SCREAMING_SNAKE_CASE` naming conventions. This provides compile-time type checking and maintainability.
@@ -68,5 +68,5 @@ All functions include comprehensive unit tests using Rust's built-in testing fra
 ### Recordkeeping
 - ROADMAP.md: After implementing a new feature, you MUST update this file.
 - LESSONS_LEARNED.md: If you encounter difficulty with a particular bug that takes you several attempts to fix, you MUST update your notes for future reference so you don't get stuck on the same problem again.
-- CLAUDE.md: After making or changing any product or architecture decisions you MUST update CLAUDE.md to maintain its accuracy.
+- AGENTS.md: After making or changing any product or architecture decisions you MUST update AGENTS.md to maintain its accuracy. (This file is symlinked to CLAUDE.md and GEMINI.md so you only need to edit one file.)
 - ADRs: We document all major architecture decisions in our ./adrs folder. When new decisions are made or we decide to change a major decision, we add a new ADR document in Markdown with numbered file names to maintain order of decisionmaking (e.g. ./adrs/001-our-first-decision.md)
