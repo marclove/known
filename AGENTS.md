@@ -33,11 +33,11 @@ The codebase provides the following main functionality:
 
 1. **`create_agents_file()`** - Creates AGENTS.md files with case-insensitive checks and handles migration from existing CLAUDE.md or GEMINI.md files
 2. **`create_symlinks()`** - Creates symlinks from CLAUDE.md and GEMINI.md to AGENTS.md, and migrates files from .cursor/rules and .windsurf/rules to .rules directory
-3. **`start_daemon()`** - Starts a file watching daemon that monitors .rules directory and maintains synchronized symlinks in .cursor/rules and .windsurf/rules. Enforces single instance operation using PID file locking.
+3. **`start_daemon()`** - Starts a file watching daemon that monitors .rules directory and maintains synchronized symlinks in .cursor/rules and .windsurf/rules. Enforces system-wide single instance operation using centralized PID file locking.
 4. **`enable_autostart()`** - Enables cross-platform autostart for the daemon using the auto-launch crate
 5. **`disable_autostart()`** - Disables autostart for the daemon
 6. **`is_autostart_enabled()`** - Checks if autostart is currently enabled
-7. **`SingleInstanceLock`** - Provides PID file locking mechanism to ensure only one daemon instance runs at a time
+7. **`SingleInstanceLock`** - Provides system-wide PID file locking mechanism to ensure only one daemon instance runs at a time across the entire system
 8. **Helper functions**:
    - `ensure_rules_directory_exists()` - Creates .rules directory if it doesn't exist
    - `remove_existing_symlinks()` - Removes existing symlink files before creating new ones

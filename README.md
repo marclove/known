@@ -13,7 +13,7 @@ Known helps you create and manage instruction files for various AI coding assist
 - **Symlink generation**: Creates `CLAUDE.md` and `GEMINI.md` symlinks pointing to `AGENTS.md`
 - **Rules directory management**: Automatically creates `.rules` directory and migrates files from `.cursor/rules` and `.windsurf/rules`
 - **Daemon process**: File watching daemon that maintains synchronized symlinks across IDE rules directories
-- **Single instance enforcement**: Prevents multiple daemon instances from running simultaneously using PID file locking
+- **System-wide single instance enforcement**: Prevents multiple daemon instances from running simultaneously across the entire system using centralized PID file locking
 - **Cross-platform autostart**: System-level autostart configuration for seamless daemon management
 - **Cross-platform compatibility**: Works on Unix and Windows systems
 - **CLI interface**: Simple command-line tool for project initialization and management
@@ -67,8 +67,8 @@ This command will:
 - Monitor the `.rules` directory for changes
 - Automatically create and maintain symlinks in `.cursor/rules` and `.windsurf/rules`
 - Keep the rules directories synchronized with the unified `.rules` directory
-- Enforce single instance operation (only one daemon can run per directory)
-- Create a `.known_daemon.pid` file for process management
+- Enforce system-wide single instance operation (only one daemon can run across the entire system)
+- Create a centralized PID file for process management
 - Run continuously until stopped with Ctrl+C
 
 ### Autostart management
@@ -122,7 +122,7 @@ let enabled = is_autostart_enabled()?;
 disable_autostart()?;
 
 // Manual single instance lock management (advanced usage)
-let _lock = SingleInstanceLock::acquire(".")?;  // Acquire lock for current directory
+let _lock = SingleInstanceLock::acquire()?;  // Acquire system-wide lock
 // Lock is automatically released when _lock goes out of scope
 ```
 
@@ -135,7 +135,6 @@ your-project/
 ├── AGENTS.md              # Main instruction file
 ├── CLAUDE.md              # Symlink to AGENTS.md
 ├── GEMINI.md              # Symlink to AGENTS.md
-├── .known_daemon.pid      # PID file (when daemon is running)
 └── .rules/                # Directory for project-specific rules
     ├── rule1.txt          # Migrated from .cursor/rules/
     └── config.toml        # Migrated from .windsurf/rules/
@@ -154,19 +153,19 @@ This migration happens automatically when you run `known symlink`. If files with
 
 The daemon process enforces single instance operation to prevent conflicts and resource contention:
 
-- **PID File Locking**: Uses `.known_daemon.pid` file with exclusive file locking
+- **Centralized PID File Locking**: Uses a system-wide PID file with exclusive file locking
 - **Automatic Cleanup**: PID file is automatically removed when daemon stops gracefully
 - **Stale Process Detection**: Detects and handles stale PID files from crashed processes
 - **Error Handling**: Provides clear error messages when attempting to start multiple instances
 
-If you try to start a second daemon instance in the same directory, you'll see an error message:
+If you try to start a second daemon instance anywhere on the system, you'll see an error message:
 
 ```bash
 $ known daemon
 Error running daemon: Another instance of the daemon is already running
 ```
 
-The PID file contains the process ID of the running daemon and is automatically cleaned up when the process stops.
+The centralized PID file contains the process ID of the running daemon and is automatically cleaned up when the process stops.
 
 ## Default AGENTS.md Content
 
