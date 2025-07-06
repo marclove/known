@@ -72,38 +72,29 @@ pub fn start_daemon_with_test_config(
     start_daemon_with_config_no_lock(shutdown_rx, config)
 }
 
-/// Internal function that handles the actual daemon logic with a given config
-fn start_daemon_with_config(
-    shutdown_rx: mpsc::Receiver<()>,
-    config: crate::config::Config,
-) -> io::Result<()> {
-    // Acquire system-wide single instance lock first
-    let _lock = SingleInstanceLock::acquire()?;
-    println!("Acquired system-wide single instance lock");
-
-    start_daemon_with_config_no_lock(shutdown_rx, config)
+/// Represents the complete watcher setup for the daemon.
+struct WatcherSetup {
+    watchers: Vec<RecommendedWatcher>,
+    rules_paths: HashMap<PathBuf, PathBuf>,
+    event_receiver: mpsc::Receiver<Result<Event, notify::Error>>,
+    config_file_path: PathBuf,
 }
 
-/// Internal function that handles the daemon logic without acquiring a lock (for testing)
-fn start_daemon_with_config_no_lock(
-    shutdown_rx: mpsc::Receiver<()>,
-    mut config: crate::config::Config,
-) -> io::Result<()> {
-    let mut watched_directories = config.get_watched_directories().clone();
-
-    if watched_directories.is_empty() {
-        println!("No directories configured to watch. Use 'known symlink' in project directories to add them.");
-        return Ok(());
-    }
-
+/// Prints the list of directories being watched.
+fn print_watched_directories(watched_directories: &std::collections::HashSet<PathBuf>) {
     println!(
         "Watching {} directories for changes:",
         watched_directories.len()
     );
-    for dir in &watched_directories {
+    for dir in watched_directories {
         println!("  - {}", dir.display());
     }
+}
 
+/// Sets up all watchers (config file watcher and directory watchers).
+fn setup_all_watchers(
+    watched_directories: &std::collections::HashSet<PathBuf>,
+) -> io::Result<WatcherSetup> {
     // Create a map to track rules paths and their canonical versions
     let mut rules_paths = HashMap::new();
     let mut watchers = Vec::new();
@@ -129,7 +120,7 @@ fn start_daemon_with_config_no_lock(
     }
 
     // Set up watchers for initial directories
-    setup_directory_watchers(&watched_directories, &tx, &mut watchers, &mut rules_paths)?;
+    setup_directory_watchers(watched_directories, &tx, &mut watchers, &mut rules_paths)?;
 
     if watchers.is_empty() {
         return Err(io::Error::new(
@@ -138,11 +129,21 @@ fn start_daemon_with_config_no_lock(
         ));
     }
 
-    println!(
-        "System-wide daemon started, watching {} directories for changes...",
-        watchers.len()
-    );
+    Ok(WatcherSetup {
+        watchers,
+        rules_paths,
+        event_receiver: rx,
+        config_file_path,
+    })
+}
 
+/// Runs the main daemon event loop.
+fn run_daemon_event_loop(
+    shutdown_rx: mpsc::Receiver<()>,
+    config: &mut crate::config::Config,
+    watched_directories: &mut std::collections::HashSet<PathBuf>,
+    mut watcher_setup: WatcherSetup,
+) -> io::Result<()> {
     // Main event loop
     loop {
         // Check for shutdown signal (non-blocking)
@@ -152,20 +153,21 @@ fn start_daemon_with_config_no_lock(
         }
 
         // Check for file system events (with timeout)
-        match rx.recv_timeout(Duration::from_millis(100)) {
+        match watcher_setup
+            .event_receiver
+            .recv_timeout(Duration::from_millis(100))
+        {
             Ok(Ok(event)) => {
                 // Check if this is a config file change
-                if is_config_file_event(&event, &config_file_path) {
-                    if let Err(e) = handle_config_file_change(
-                        &mut config,
-                        &mut watched_directories,
-                        &tx,
-                        &mut watchers,
-                        &mut rules_paths,
+                if is_config_file_event(&event, &watcher_setup.config_file_path) {
+                    if let Err(e) = handle_config_file_change_internal(
+                        config,
+                        watched_directories,
+                        &mut watcher_setup,
                     ) {
                         eprintln!("Error handling config file change: {}", e);
                     }
-                } else if let Err(e) = handle_file_event(&event, &rules_paths) {
+                } else if let Err(e) = handle_file_event(&event, &watcher_setup.rules_paths) {
                     eprintln!("Error handling file event: {}", e);
                 }
             }
@@ -181,6 +183,141 @@ fn start_daemon_with_config_no_lock(
             }
         }
     }
+
+    Ok(())
+}
+
+/// Handles configuration file changes with watcher setup management.
+fn handle_config_file_change_internal(
+    config: &mut crate::config::Config,
+    watched_directories: &mut std::collections::HashSet<PathBuf>,
+    watcher_setup: &mut WatcherSetup,
+) -> io::Result<()> {
+    println!("Configuration file changed, reloading...");
+
+    // Load new configuration
+    let new_config = match load_config() {
+        Ok(config) => config,
+        Err(e) => {
+            eprintln!("Failed to reload configuration: {}", e);
+            return Ok(()); // Don't fail the daemon, just log the error
+        }
+    };
+
+    let new_watched_directories = new_config.get_watched_directories().clone();
+
+    // Find directories that were added
+    let added_directories: std::collections::HashSet<_> = new_watched_directories
+        .difference(watched_directories)
+        .collect();
+
+    // Find directories that were removed
+    let removed_directories: std::collections::HashSet<_> = watched_directories
+        .difference(&new_watched_directories)
+        .collect();
+
+    if !added_directories.is_empty() {
+        println!(
+            "Adding {} new directories to watch:",
+            added_directories.len()
+        );
+        for dir in &added_directories {
+            println!("  + {}", dir.display());
+        }
+
+        // Add watchers for new directories
+        let added_dirs_set: std::collections::HashSet<PathBuf> =
+            added_directories.into_iter().cloned().collect();
+        let (tx, _) = mpsc::channel(); // We don't use this receiver, just need the sender
+        if let Err(e) = setup_directory_watchers(
+            &added_dirs_set,
+            &tx,
+            &mut watcher_setup.watchers,
+            &mut watcher_setup.rules_paths,
+        ) {
+            eprintln!("Failed to setup watchers for new directories: {}", e);
+        }
+    }
+
+    if !removed_directories.is_empty() {
+        println!(
+            "Removing {} directories from watch:",
+            removed_directories.len()
+        );
+        for dir in &removed_directories {
+            println!("  - {}", dir.display());
+        }
+
+        // Remove watchers and rules_paths entries for removed directories
+        for removed_dir in &removed_directories {
+            let rules_path = removed_dir.join(RULES_DIR);
+            if let Ok(canonical_path) = rules_path.canonicalize() {
+                watcher_setup.rules_paths.remove(&canonical_path);
+            }
+
+            // Remove symlinks from the removed directory
+            if let Err(e) = remove_symlinks_from_directory(removed_dir) {
+                eprintln!(
+                    "Failed to remove symlinks from {}: {}",
+                    removed_dir.display(),
+                    e
+                );
+            } else {
+                println!("Removed symlinks from {}", removed_dir.display());
+            }
+        }
+    }
+
+    // Update our local state
+    *config = new_config;
+    *watched_directories = new_watched_directories;
+
+    println!(
+        "Configuration reloaded successfully. Now watching {} directories.",
+        watched_directories.len()
+    );
+    Ok(())
+}
+
+/// Internal function that handles the actual daemon logic with a given config
+fn start_daemon_with_config(
+    shutdown_rx: mpsc::Receiver<()>,
+    config: crate::config::Config,
+) -> io::Result<()> {
+    // Acquire system-wide single instance lock first
+    let _lock = SingleInstanceLock::acquire()?;
+    println!("Acquired system-wide single instance lock");
+
+    start_daemon_with_config_no_lock(shutdown_rx, config)
+}
+
+/// Internal function that handles the daemon logic without acquiring a lock (for testing)
+fn start_daemon_with_config_no_lock(
+    shutdown_rx: mpsc::Receiver<()>,
+    mut config: crate::config::Config,
+) -> io::Result<()> {
+    let mut watched_directories = config.get_watched_directories().clone();
+
+    if watched_directories.is_empty() {
+        println!("No directories configured to watch. Use 'known symlink' in project directories to add them.");
+        return Ok(());
+    }
+
+    print_watched_directories(&watched_directories);
+
+    let watcher_setup = setup_all_watchers(&watched_directories)?;
+
+    println!(
+        "System-wide daemon started, watching {} directories for changes...",
+        watcher_setup.watchers.len()
+    );
+
+    run_daemon_event_loop(
+        shutdown_rx,
+        &mut config,
+        &mut watched_directories,
+        watcher_setup,
+    )?;
 
     println!("System-wide daemon stopped");
     Ok(())
@@ -433,96 +570,6 @@ fn is_config_file_event(event: &Event, config_file_path: &Path) -> bool {
         path.file_name() == config_file_path.file_name()
             && path.parent() == config_file_path.parent()
     })
-}
-
-/// Handles configuration file changes by updating watched directories
-fn handle_config_file_change(
-    config: &mut crate::config::Config,
-    watched_directories: &mut std::collections::HashSet<PathBuf>,
-    tx: &mpsc::Sender<Result<Event, notify::Error>>,
-    watchers: &mut Vec<RecommendedWatcher>,
-    rules_paths: &mut HashMap<PathBuf, PathBuf>,
-) -> io::Result<()> {
-    println!("Configuration file changed, reloading...");
-
-    // Load new configuration
-    let new_config = match load_config() {
-        Ok(config) => config,
-        Err(e) => {
-            eprintln!("Failed to reload configuration: {}", e);
-            return Ok(()); // Don't fail the daemon, just log the error
-        }
-    };
-
-    let new_watched_directories = new_config.get_watched_directories().clone();
-
-    // Find directories that were added
-    let added_directories: std::collections::HashSet<_> = new_watched_directories
-        .difference(watched_directories)
-        .collect();
-
-    // Find directories that were removed
-    let removed_directories: std::collections::HashSet<_> = watched_directories
-        .difference(&new_watched_directories)
-        .collect();
-
-    if !added_directories.is_empty() {
-        println!(
-            "Adding {} new directories to watch:",
-            added_directories.len()
-        );
-        for dir in &added_directories {
-            println!("  + {}", dir.display());
-        }
-
-        // Add watchers for new directories
-        let added_dirs_set: std::collections::HashSet<PathBuf> =
-            added_directories.into_iter().cloned().collect();
-        if let Err(e) = setup_directory_watchers(&added_dirs_set, tx, watchers, rules_paths) {
-            eprintln!("Failed to setup watchers for new directories: {}", e);
-        }
-    }
-
-    if !removed_directories.is_empty() {
-        println!(
-            "Removing {} directories from watch:",
-            removed_directories.len()
-        );
-        for dir in &removed_directories {
-            println!("  - {}", dir.display());
-        }
-
-        // Remove watchers and rules_paths entries for removed directories
-        // Note: We can't easily remove specific watchers from the Vec without tracking them individually,
-        // but since removed directories won't match in rules_paths anymore, events will be ignored
-        for removed_dir in &removed_directories {
-            let rules_path = removed_dir.join(RULES_DIR);
-            if let Ok(canonical_path) = rules_path.canonicalize() {
-                rules_paths.remove(&canonical_path);
-            }
-
-            // Remove symlinks from the removed directory
-            if let Err(e) = remove_symlinks_from_directory(removed_dir) {
-                eprintln!(
-                    "Failed to remove symlinks from {}: {}",
-                    removed_dir.display(),
-                    e
-                );
-            } else {
-                println!("Removed symlinks from {}", removed_dir.display());
-            }
-        }
-    }
-
-    // Update our local state
-    *config = new_config;
-    *watched_directories = new_watched_directories;
-
-    println!(
-        "Configuration reloaded successfully. Now watching {} directories.",
-        watched_directories.len()
-    );
-    Ok(())
 }
 
 #[cfg(test)]
@@ -787,5 +834,71 @@ mod tests {
         // Verify original files in .rules are untouched
         assert!(rules_path1.join("test1.md").exists());
         assert!(rules_path2.join("test2.md").exists());
+    }
+
+    #[test]
+    fn test_start_daemon_with_config_no_lock_comprehensive() {
+        // This test verifies comprehensive behavior of start_daemon_with_config_no_lock
+        use std::time::Duration;
+
+        let dir1 = tempdir().unwrap();
+        let dir2 = tempdir().unwrap();
+
+        // Create .rules directories with test files
+        let rules_path1 = dir1.path().join(RULES_DIR);
+        let rules_path2 = dir2.path().join(RULES_DIR);
+        fs::create_dir(&rules_path1).unwrap();
+        fs::create_dir(&rules_path2).unwrap();
+        fs::write(rules_path1.join("test1.md"), "content1").unwrap();
+        fs::write(rules_path2.join("test2.md"), "content2").unwrap();
+
+        // Create config with both directories
+        let mut config = Config::new();
+        config.add_directory(dir1.path());
+        config.add_directory(dir2.path());
+
+        // Test 1: Daemon should set up watchers and create initial symlinks
+        let (shutdown_tx, shutdown_rx) = mpsc::channel();
+
+        // Start daemon in a separate thread that will exit quickly
+        let config_clone = config.clone();
+        let handle =
+            std::thread::spawn(move || start_daemon_with_test_config(shutdown_rx, config_clone));
+
+        // Give daemon time to initialize
+        std::thread::sleep(Duration::from_millis(50));
+
+        // Send shutdown signal
+        shutdown_tx.send(()).unwrap();
+
+        // Wait for daemon to finish
+        let result = handle.join().unwrap();
+        assert!(
+            result.is_ok(),
+            "Daemon should start and shutdown successfully"
+        );
+
+        // Verify that symlinks were created for both directories
+        assert!(dir1.path().join(CURSOR_RULES_DIR).join("test1.md").exists());
+        assert!(dir1
+            .path()
+            .join(WINDSURF_RULES_DIR)
+            .join("test1.md")
+            .exists());
+        assert!(dir2.path().join(CURSOR_RULES_DIR).join("test2.md").exists());
+        assert!(dir2
+            .path()
+            .join(WINDSURF_RULES_DIR)
+            .join("test2.md")
+            .exists());
+
+        // Test 2: Empty config should return Ok without error
+        let empty_config = Config::new();
+        let (_shutdown_tx2, shutdown_rx2) = mpsc::channel();
+        let result2 = start_daemon_with_test_config(shutdown_rx2, empty_config);
+        assert!(
+            result2.is_ok(),
+            "Daemon should handle empty config gracefully"
+        );
     }
 }
