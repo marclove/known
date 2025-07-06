@@ -228,7 +228,9 @@ fn main() {
 
 #[cfg(test)]
 mod tests {
-    use known::{add_directory_to_config_file, load_config_from_file, remove_directory_from_config_file};
+    use known::{
+        add_directory_to_config_file, load_config_from_file, remove_directory_from_config_file,
+    };
     use tempfile::tempdir;
 
     #[test]

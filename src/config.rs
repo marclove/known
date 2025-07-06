@@ -210,7 +210,7 @@ pub fn remove_directory_from_config<P: AsRef<Path>>(dir_path: P) -> io::Result<b
 /// Returns an error if file reading or JSON parsing fails
 pub fn load_config_from_file<P: AsRef<Path>>(config_path: P) -> io::Result<Config> {
     let config_path = config_path.as_ref();
-    
+
     // If config file doesn't exist, return default config
     if !config_path.exists() {
         return Ok(Config::default());

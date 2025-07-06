@@ -123,13 +123,16 @@ fn start_daemon_with_config_no_lock(
     let config_file_path = get_config_file_path()?;
     let mut config_watcher = RecommendedWatcher::new(tx.clone(), Config::default())
         .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
-    
+
     if let Some(config_parent) = config_file_path.parent() {
         if config_parent.exists() {
             config_watcher
                 .watch(config_parent, RecursiveMode::NonRecursive)
                 .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
-            println!("Watching configuration file for changes: {}", config_file_path.display());
+            println!(
+                "Watching configuration file for changes: {}",
+                config_file_path.display()
+            );
         }
     }
 
@@ -161,7 +164,13 @@ fn start_daemon_with_config_no_lock(
             Ok(Ok(event)) => {
                 // Check if this is a config file change
                 if is_config_file_event(&event, &config_file_path) {
-                    if let Err(e) = handle_config_file_change(&mut config, &mut watched_directories, &tx, &mut watchers, &mut rules_paths) {
+                    if let Err(e) = handle_config_file_change(
+                        &mut config,
+                        &mut watched_directories,
+                        &tx,
+                        &mut watchers,
+                        &mut rules_paths,
+                    ) {
                         eprintln!("Error handling config file change: {}", e);
                     }
                 } else if let Err(e) = handle_file_event(&event, &rules_paths) {
@@ -332,6 +341,49 @@ fn sync_rules_directory(
     Ok(())
 }
 
+/// Removes all symlinks from the target directories for a given project directory.
+///
+/// This function removes all symlinks in both .cursor/rules and .windsurf/rules
+/// directories for the specified project directory. It only removes the symlinks,
+/// not the original files in .rules.
+///
+/// # Arguments
+///
+/// * `dir` - Path to the project directory containing the .rules directory
+///
+/// # Errors
+///
+/// Returns an error if directory operations or file removal fails
+///
+fn remove_symlinks_from_directory(dir: &Path) -> io::Result<()> {
+    let cursor_rules_path = dir.join(CURSOR_RULES_DIR);
+    let windsurf_rules_path = dir.join(WINDSURF_RULES_DIR);
+
+    // Remove all files from .cursor/rules if it exists
+    if cursor_rules_path.exists() {
+        for entry in fs::read_dir(&cursor_rules_path)? {
+            let entry = entry?;
+            let path = entry.path();
+            if path.is_file() {
+                fs::remove_file(&path)?;
+            }
+        }
+    }
+
+    // Remove all files from .windsurf/rules if it exists
+    if windsurf_rules_path.exists() {
+        for entry in fs::read_dir(&windsurf_rules_path)? {
+            let entry = entry?;
+            let path = entry.path();
+            if path.is_file() {
+                fs::remove_file(&path)?;
+            }
+        }
+    }
+
+    Ok(())
+}
+
 /// Sets up watchers for the given directories
 fn setup_directory_watchers(
     directories: &std::collections::HashSet<PathBuf>,
@@ -386,8 +438,8 @@ fn setup_directory_watchers(
 /// Checks if the file event is related to the configuration file
 fn is_config_file_event(event: &Event, config_file_path: &Path) -> bool {
     event.paths.iter().any(|path| {
-        path.file_name() == config_file_path.file_name() && 
-        path.parent() == config_file_path.parent()
+        path.file_name() == config_file_path.file_name()
+            && path.parent() == config_file_path.parent()
     })
 }
 
@@ -400,7 +452,7 @@ fn handle_config_file_change(
     rules_paths: &mut HashMap<PathBuf, PathBuf>,
 ) -> io::Result<()> {
     println!("Configuration file changed, reloading...");
-    
+
     // Load new configuration
     let new_config = match load_config() {
         Ok(config) => config,
@@ -409,38 +461,45 @@ fn handle_config_file_change(
             return Ok(()); // Don't fail the daemon, just log the error
         }
     };
-    
+
     let new_watched_directories = new_config.get_watched_directories().clone();
-    
+
     // Find directories that were added
     let added_directories: std::collections::HashSet<_> = new_watched_directories
         .difference(watched_directories)
         .collect();
-    
+
     // Find directories that were removed
     let removed_directories: std::collections::HashSet<_> = watched_directories
         .difference(&new_watched_directories)
         .collect();
-    
+
     if !added_directories.is_empty() {
-        println!("Adding {} new directories to watch:", added_directories.len());
+        println!(
+            "Adding {} new directories to watch:",
+            added_directories.len()
+        );
         for dir in &added_directories {
             println!("  + {}", dir.display());
         }
-        
+
         // Add watchers for new directories
-        let added_dirs_set: std::collections::HashSet<PathBuf> = added_directories.into_iter().cloned().collect();
+        let added_dirs_set: std::collections::HashSet<PathBuf> =
+            added_directories.into_iter().cloned().collect();
         if let Err(e) = setup_directory_watchers(&added_dirs_set, tx, watchers, rules_paths) {
             eprintln!("Failed to setup watchers for new directories: {}", e);
         }
     }
-    
+
     if !removed_directories.is_empty() {
-        println!("Removing {} directories from watch:", removed_directories.len());
+        println!(
+            "Removing {} directories from watch:",
+            removed_directories.len()
+        );
         for dir in &removed_directories {
             println!("  - {}", dir.display());
         }
-        
+
         // Remove watchers and rules_paths entries for removed directories
         // Note: We can't easily remove specific watchers from the Vec without tracking them individually,
         // but since removed directories won't match in rules_paths anymore, events will be ignored
@@ -449,14 +508,28 @@ fn handle_config_file_change(
             if let Ok(canonical_path) = rules_path.canonicalize() {
                 rules_paths.remove(&canonical_path);
             }
+
+            // Remove symlinks from the removed directory
+            if let Err(e) = remove_symlinks_from_directory(removed_dir) {
+                eprintln!(
+                    "Failed to remove symlinks from {}: {}",
+                    removed_dir.display(),
+                    e
+                );
+            } else {
+                println!("Removed symlinks from {}", removed_dir.display());
+            }
         }
     }
-    
+
     // Update our local state
     *config = new_config;
     *watched_directories = new_watched_directories;
-    
-    println!("Configuration reloaded successfully. Now watching {} directories.", watched_directories.len());
+
+    println!(
+        "Configuration reloaded successfully. Now watching {} directories.",
+        watched_directories.len()
+    );
     Ok(())
 }
 
@@ -609,23 +682,23 @@ mod tests {
     #[test]
     fn test_is_config_file_event() {
         let config_path = Path::new("/home/user/.config/known/config.json");
-        
+
         // Test event that matches config file
         let matching_event = Event {
             kind: EventKind::Modify(ModifyKind::Data(notify::event::DataChange::Content)),
             paths: vec![config_path.to_path_buf()],
             attrs: Default::default(),
         };
-        
+
         assert!(is_config_file_event(&matching_event, config_path));
-        
+
         // Test event that doesn't match config file
         let non_matching_event = Event {
             kind: EventKind::Modify(ModifyKind::Data(notify::event::DataChange::Content)),
             paths: vec![Path::new("/some/other/file.txt").to_path_buf()],
             attrs: Default::default(),
         };
-        
+
         assert!(!is_config_file_event(&non_matching_event, config_path));
     }
 
@@ -633,40 +706,94 @@ mod tests {
     fn test_setup_directory_watchers() {
         let dir1 = tempdir().unwrap();
         let dir2 = tempdir().unwrap();
-        
+
         // Create .rules directories
         let rules_path1 = dir1.path().join(RULES_DIR);
         let rules_path2 = dir2.path().join(RULES_DIR);
         fs::create_dir(&rules_path1).unwrap();
         fs::create_dir(&rules_path2).unwrap();
-        
+
         // Create test files
         fs::write(rules_path1.join("test1.md"), "content1").unwrap();
         fs::write(rules_path2.join("test2.md"), "content2").unwrap();
-        
+
         // Create directory set
         let mut directories = std::collections::HashSet::new();
         directories.insert(dir1.path().to_path_buf());
         directories.insert(dir2.path().to_path_buf());
-        
+
         // Set up watchers
         let (tx, _rx) = mpsc::channel();
         let mut watchers = Vec::new();
         let mut rules_paths = HashMap::new();
-        
+
         let result = setup_directory_watchers(&directories, &tx, &mut watchers, &mut rules_paths);
         assert!(result.is_ok(), "Should successfully set up watchers");
-        
+
         // Verify watchers were created
         assert_eq!(watchers.len(), 2, "Should have 2 watchers");
-        
+
         // Verify rules_paths contains both directories
         assert_eq!(rules_paths.len(), 2, "Should track 2 rules paths");
-        
+
         // Verify symlinks were created
         assert!(dir1.path().join(CURSOR_RULES_DIR).join("test1.md").exists());
-        assert!(dir1.path().join(WINDSURF_RULES_DIR).join("test1.md").exists());
+        assert!(dir1
+            .path()
+            .join(WINDSURF_RULES_DIR)
+            .join("test1.md")
+            .exists());
         assert!(dir2.path().join(CURSOR_RULES_DIR).join("test2.md").exists());
-        assert!(dir2.path().join(WINDSURF_RULES_DIR).join("test2.md").exists());
+        assert!(dir2
+            .path()
+            .join(WINDSURF_RULES_DIR)
+            .join("test2.md")
+            .exists());
+    }
+
+    #[test]
+    fn test_remove_symlinks_when_directory_removed_from_config() {
+        let dir1 = tempdir().unwrap();
+        let dir2 = tempdir().unwrap();
+
+        // Create .rules directories and files
+        let rules_path1 = dir1.path().join(RULES_DIR);
+        let rules_path2 = dir2.path().join(RULES_DIR);
+        fs::create_dir(&rules_path1).unwrap();
+        fs::create_dir(&rules_path2).unwrap();
+
+        fs::write(rules_path1.join("test1.md"), "content1").unwrap();
+        fs::write(rules_path2.join("test2.md"), "content2").unwrap();
+
+        // Create target directories
+        let cursor_rules_path1 = dir1.path().join(CURSOR_RULES_DIR);
+        let windsurf_rules_path1 = dir1.path().join(WINDSURF_RULES_DIR);
+        let cursor_rules_path2 = dir2.path().join(CURSOR_RULES_DIR);
+        let windsurf_rules_path2 = dir2.path().join(WINDSURF_RULES_DIR);
+
+        // Sync both directories to create initial symlinks
+        sync_rules_directory(&rules_path1, &cursor_rules_path1, &windsurf_rules_path1).unwrap();
+        sync_rules_directory(&rules_path2, &cursor_rules_path2, &windsurf_rules_path2).unwrap();
+
+        // Verify symlinks exist initially
+        assert!(cursor_rules_path1.join("test1.md").exists());
+        assert!(windsurf_rules_path1.join("test1.md").exists());
+        assert!(cursor_rules_path2.join("test2.md").exists());
+        assert!(windsurf_rules_path2.join("test2.md").exists());
+
+        // Remove symlinks from dir2 (simulating removal from config)
+        remove_symlinks_from_directory(dir2.path()).unwrap();
+
+        // Verify symlinks in dir1 still exist
+        assert!(cursor_rules_path1.join("test1.md").exists());
+        assert!(windsurf_rules_path1.join("test1.md").exists());
+
+        // Verify symlinks in dir2 have been removed
+        assert!(!cursor_rules_path2.join("test2.md").exists());
+        assert!(!windsurf_rules_path2.join("test2.md").exists());
+
+        // Verify original files in .rules are untouched
+        assert!(rules_path1.join("test1.md").exists());
+        assert!(rules_path2.join("test2.md").exists());
     }
 }
