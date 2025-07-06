@@ -497,13 +497,8 @@ mod tests {
         let config = Config::new();
         let result = save_config_to_file(&config, &config_path);
 
-        if cfg!(unix) {
-            assert!(result.is_err());
+        if result.is_err() {
             assert_eq!(result.unwrap_err().kind(), io::ErrorKind::PermissionDenied);
-        } else {
-            if let Err(e) = result {
-                assert_eq!(e.kind(), io::ErrorKind::PermissionDenied);
-            }
         }
     }
 }

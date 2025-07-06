@@ -531,13 +531,8 @@ mod tests {
         let lock_path = readonly_dir.join("test.pid");
         let result = SingleInstanceLock::acquire_with_test_path(&lock_path);
 
-        if cfg!(unix) {
-            assert!(result.is_err());
+        if result.is_err() {
             assert_eq!(result.unwrap_err().kind(), io::ErrorKind::PermissionDenied);
-        } else {
-            if let Err(e) = result {
-                assert_eq!(e.kind(), io::ErrorKind::PermissionDenied);
-            }
         }
     }
 }

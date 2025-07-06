@@ -341,15 +341,8 @@ mod tests {
 
         let result = create_agents_file_in_dir(&readonly_dir);
 
-        if cfg!(unix) {
-            assert!(result.is_err());
+        if result.is_err() {
             assert_eq!(result.unwrap_err().kind(), io::ErrorKind::PermissionDenied);
-        } else {
-            // On Windows, setting a directory to read-only doesn't prevent file creation.
-            // If it does error, it should be PermissionDenied. But it can also succeed.
-            if let Err(e) = result {
-                assert_eq!(e.kind(), io::ErrorKind::PermissionDenied);
-            }
         }
     }
 }

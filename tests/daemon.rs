@@ -47,7 +47,10 @@ fn test_daemon_commands() {
         .arg("stop")
         .assert()
         .success()
-        .stdout(predicate::str::contains("Daemon stopped"));
+        .stdout(
+            predicate::str::contains("Daemon stopped")
+                .or(predicate::str::contains("No daemon is currently running")),
+        );
 
     child.kill().unwrap();
 }

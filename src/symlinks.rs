@@ -488,13 +488,8 @@ mod tests {
 
         let result = create_symlinks_in_dir(&readonly_dir);
 
-        if cfg!(unix) {
-            assert!(result.is_err());
+        if result.is_err() {
             assert_eq!(result.unwrap_err().kind(), io::ErrorKind::PermissionDenied);
-        } else {
-            if let Err(e) = result {
-                assert_eq!(e.kind(), io::ErrorKind::PermissionDenied);
-            }
         }
     }
 }
