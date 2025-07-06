@@ -1,7 +1,14 @@
 {
   "permissions": {
     "allow": [
-      "Bash(cargo:*)"
+      "Bash(cargo:*)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:windsurf.com)",
+      "WebFetch(domain:anthropic.com)",
+      "WebFetch(domain:cursor.com)",
+      "WebFetch(domain:cline.bot)",
+      "WebFetch(domain:google.com)",
+      "WebFetch(domain:openai.com)"
     ],
     "deny": []
   }
