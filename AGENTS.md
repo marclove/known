@@ -24,7 +24,12 @@ The project follows standard Rust library structure:
 - `src/autostart.rs` - Cross-platform autostart management
 - `src/config.rs` - Configuration file management for tracking watched directories
 - `src/constants.rs` - Shared constants used throughout the application
-- `src/daemon.rs` - File watching daemon with single instance enforcement
+- `src/daemon/` - Modular file watching daemon with single instance enforcement
+  - `src/daemon/mod.rs` - Main daemon orchestration and lifecycle management
+  - `src/daemon/events.rs` - File system event handling and processing
+  - `src/daemon/watchers.rs` - File watcher setup and directory monitoring
+  - `src/daemon/config_handler.rs` - Configuration file change handling and hot-reloading
+  - `src/daemon/symlinks.rs` - Symlink management operations
 - `src/single_instance.rs` - PID file locking for single instance enforcement
 - `src/symlinks.rs` - Symlink creation and rules directory management
 - `Cargo.toml` - Project configuration and dependencies
@@ -45,13 +50,18 @@ The codebase provides the following main functionality:
    - `save_config()` - Saves configuration to platform-specific application directory
    - `add_directory_to_config()` - Adds a directory to the watched directories list
    - `remove_directory_from_config()` - Removes a directory from the watched directories list
-9. **Helper functions**:
+9. **Daemon module functions**:
+   - `run_daemon_event_loop()` - Main event processing loop for file system events
+   - `handle_file_event()` - Handles individual file system events and updates symlinks accordingly
+   - `setup_all_watchers()` - Sets up file watchers for all configured directories
+   - `handle_config_file_change_internal()` - Handles configuration file changes and hot-reloading
+   - `sync_rules_directory()` - Synchronizes existing files from .rules to target directories
+   - `remove_symlinks_from_directory()` - Removes symlinks from target directories
+10. **Helper functions**:
    - `ensure_rules_directory_exists()` - Creates .rules directory if it doesn't exist
    - `remove_existing_symlinks()` - Removes existing symlink files before creating new ones
    - `move_files_to_rules_dir()` - Moves files from source directories to .rules with conflict handling
-   - `handle_file_event()` - Handles file system events and updates symlinks accordingly
    - `create_symlink_to_file()` - Creates platform-specific symlinks
-   - `sync_rules_directory()` - Synchronizes existing files from .rules to target directories
 
 ### CLI Commands
 

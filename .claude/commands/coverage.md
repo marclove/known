@@ -1,1 +1,1 @@
-Check our test coverage and add any obvious improvements, if called for.
+Check our test coverage (`cargo tarpaulin`) and add any obvious improvements, if called for.
