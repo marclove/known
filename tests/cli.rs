@@ -25,6 +25,10 @@ fn test_add_command() {
     let project_dir = temp_dir.path().join("project");
     std::fs::create_dir(&project_dir).unwrap();
 
+    // Create the config directory structure that the directories crate expects
+    let config_dir = temp_dir.path().join(".config").join("known");
+    std::fs::create_dir_all(&config_dir).unwrap();
+
     // Test `add` command
     cmd.env("HOME", temp_dir.path())
         .arg("add")
@@ -41,6 +45,13 @@ fn test_remove_command() {
     let temp_dir = tempdir().unwrap();
     let project_dir = temp_dir.path().join("project");
     std::fs::create_dir(&project_dir).unwrap();
+
+    // Create the config directory structure that the directories crate expects
+    let config_dir = temp_dir.path().join(".config").join("known");
+    std::fs::create_dir_all(&config_dir).unwrap();
+
+    // Verify project directory exists before testing
+    assert!(project_dir.exists(), "Project directory should exist before running add command");
 
     // First, add the directory
     let mut add_cmd = Command::cargo_bin("known").unwrap();
@@ -67,6 +78,10 @@ fn test_symlink_command() {
     let project_dir = temp_dir.path().join("project");
     std::fs::create_dir(&project_dir).unwrap();
     std::fs::write(project_dir.join("AGENTS.md"), "test content").unwrap();
+
+    // Create the config directory structure that the directories crate expects
+    let config_dir = temp_dir.path().join(".config").join("known");
+    std::fs::create_dir_all(&config_dir).unwrap();
 
     cmd.current_dir(&project_dir)
         .env("HOME", temp_dir.path())
