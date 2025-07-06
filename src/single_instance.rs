@@ -535,4 +535,90 @@ mod tests {
             assert_eq!(result.unwrap_err().kind(), io::ErrorKind::PermissionDenied);
         }
     }
+
+    #[test]
+    fn test_corrupted_pid_file_handling() {
+        let test_dir = tempdir().unwrap();
+        let test_lock_path = test_dir.path().join("corrupted.pid");
+
+        // Create a PID file with binary data that can't be read as valid UTF-8
+        std::fs::write(&test_lock_path, vec![0xFF, 0xFE, 0xFD]).unwrap();
+
+        // Should handle corrupted file gracefully by overwriting it
+        let lock = SingleInstanceLock::acquire_with_test_path(&test_lock_path);
+
+        // Should either succeed (by overwriting corrupted data) or fail gracefully
+        match lock {
+            Ok(lock) => {
+                // Verify that it wrote a valid PID
+                let contents = std::fs::read_to_string(&test_lock_path).unwrap();
+                let stored_pid: u32 = contents.trim().parse().unwrap();
+                assert_eq!(stored_pid, std::process::id());
+                drop(lock);
+            }
+            Err(e) => {
+                // Error should be related to file handling, not a panic
+                assert!(
+                    e.kind() == io::ErrorKind::InvalidData
+                        || e.kind() == io::ErrorKind::Other
+                        || e.kind() == io::ErrorKind::PermissionDenied
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn test_pid_file_with_extra_content() {
+        let test_dir = tempdir().unwrap();
+        let test_lock_path = test_dir.path().join("extra_content.pid");
+
+        // First, acquire a lock successfully
+        let _lock = SingleInstanceLock::acquire_with_test_path(&test_lock_path).unwrap();
+
+        // Manually modify the PID file to add extra content after the PID
+        let current_pid = std::process::id();
+        std::fs::write(
+            &test_lock_path,
+            format!("{}\nextra content\nmore stuff", current_pid),
+        )
+        .unwrap();
+
+        // Second lock acquisition should detect this as a running process
+        let result = SingleInstanceLock::acquire_with_test_path(&test_lock_path);
+        assert!(
+            result.is_err(),
+            "Should fail when PID file indicates running process"
+        );
+
+        let error = result.unwrap_err();
+        assert_eq!(error.kind(), io::ErrorKind::AlreadyExists);
+        assert!(error.to_string().contains("already running"));
+    }
+
+    #[test]
+    fn test_pid_file_parsing_edge_cases() {
+        let test_dir = tempdir().unwrap();
+
+        // Test with PID file containing only whitespace and newlines
+        let test_lock_path = test_dir.path().join("whitespace.pid");
+        std::fs::write(&test_lock_path, "  \n\t  \n  ").unwrap();
+
+        // Should be able to acquire lock when file is effectively empty
+        let lock = SingleInstanceLock::acquire_with_test_path(&test_lock_path).unwrap();
+        drop(lock);
+
+        // Test with PID file containing unparseable content
+        std::fs::write(&test_lock_path, "not_a_number").unwrap();
+
+        // Should be able to acquire lock when PID can't be parsed
+        let lock = SingleInstanceLock::acquire_with_test_path(&test_lock_path).unwrap();
+        drop(lock);
+
+        // Test with PID file containing negative number
+        std::fs::write(&test_lock_path, "-123").unwrap();
+
+        // Should be able to acquire lock when PID is invalid
+        let lock = SingleInstanceLock::acquire_with_test_path(&test_lock_path).unwrap();
+        drop(lock);
+    }
 }

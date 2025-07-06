@@ -501,4 +501,53 @@ mod tests {
             assert_eq!(result.unwrap_err().kind(), io::ErrorKind::PermissionDenied);
         }
     }
+
+    #[test]
+    fn test_remove_directory_nonexistent() {
+        let mut config = Config::new();
+        let temp_dir = tempdir().unwrap();
+        let nonexistent_path = temp_dir.path().join("nonexistent");
+
+        // Try to remove a directory that was never added
+        let removed = config.remove_directory(&nonexistent_path);
+        assert!(!removed, "Should return false when directory not in list");
+        assert_eq!(config.directory_count(), 0);
+    }
+
+    #[test]
+    fn test_contains_directory_nonexistent() {
+        let config = Config::new();
+        let temp_dir = tempdir().unwrap();
+        let nonexistent_path = temp_dir.path().join("nonexistent");
+
+        // Check for a directory that doesn't exist and wasn't added
+        let contains = config.contains_directory(&nonexistent_path);
+        assert!(!contains, "Should return false for nonexistent directory");
+    }
+
+    #[test]
+    fn test_config_serialization_error_scenarios() {
+        // Test that the configuration can handle various edge cases
+        let mut config = Config::new();
+
+        // Add a path with unusual characters (if supported by the OS)
+        let temp_dir = tempdir().unwrap();
+        let unusual_name = if cfg!(windows) {
+            // Windows has stricter path limitations
+            temp_dir.path().join("test_dir")
+        } else {
+            // Unix-like systems can handle more characters
+            temp_dir.path().join("test-dir_with.special@chars")
+        };
+
+        std::fs::create_dir_all(&unusual_name).unwrap();
+        config.add_directory(&unusual_name);
+
+        // Ensure serialization works
+        let json_str = serde_json::to_string_pretty(&config).unwrap();
+        let deserialized: Config = serde_json::from_str(&json_str).unwrap();
+
+        assert_eq!(config.directory_count(), deserialized.directory_count());
+        assert!(deserialized.contains_directory(&unusual_name));
+    }
 }
