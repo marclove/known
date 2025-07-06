@@ -10,6 +10,7 @@ use std::path::Path;
 use std::sync::mpsc;
 use std::time::Duration;
 
+use crate::single_instance::SingleInstanceLock;
 use crate::symlinks::create_symlink_to_file;
 
 /// The directory name for rules files
@@ -29,13 +30,21 @@ const WINDSURF_RULES_DIR: &str = ".windsurf/rules";
 /// it automatically updates the corresponding symlinks in the .cursor/rules
 /// and .windsurf/rules directories to keep them in sync.
 ///
+/// # Single Instance Enforcement
+///
+/// Only one instance of the daemon can run at a time. The function uses a PID
+/// file locking mechanism to ensure that multiple daemon processes cannot run
+/// simultaneously in the same directory.
+///
 /// # Behavior
 ///
+/// - Acquires a single instance lock using a PID file
 /// - Watches the .rules directory recursively for file system events
 /// - Creates symlinks in .cursor/rules and .windsurf/rules for each file in .rules
 /// - Removes symlinks when files are deleted from .rules
 /// - Runs indefinitely until the receiver channel is closed
 /// - Prints status messages to stdout for user feedback
+/// - Automatically releases the lock when the daemon stops
 ///
 /// # Arguments
 ///
@@ -45,6 +54,7 @@ const WINDSURF_RULES_DIR: &str = ".windsurf/rules";
 /// # Errors
 ///
 /// Returns an error if:
+/// - Another instance of the daemon is already running
 /// - The .rules directory doesn't exist
 /// - Watcher creation fails
 /// - File system operations fail
@@ -53,6 +63,10 @@ const WINDSURF_RULES_DIR: &str = ".windsurf/rules";
 pub fn start_daemon<P: AsRef<Path>>(dir: P, shutdown_rx: mpsc::Receiver<()>) -> io::Result<()> {
     let dir = dir.as_ref();
     let rules_path = dir.join(RULES_DIR);
+
+    // Acquire single instance lock first
+    let _lock = SingleInstanceLock::acquire(dir)?;
+    println!("Acquired single instance lock");
 
     // Check if .rules directory exists
     if !rules_path.exists() {
@@ -356,6 +370,63 @@ mod tests {
         // Wait for daemon to finish
         let daemon_result = daemon_handle.join().unwrap();
         assert!(daemon_result.is_ok(), "Daemon should complete successfully");
+    }
+
+    #[test]
+    fn test_single_instance_enforcement() {
+        let dir = tempdir().unwrap();
+
+        // Create .rules directory
+        let rules_path = dir.path().join(RULES_DIR);
+        fs::create_dir(&rules_path).unwrap();
+
+        // Create channels for shutdown signals
+        let (shutdown_tx1, shutdown_rx1) = mpsc::channel();
+        let (_shutdown_tx2, shutdown_rx2) = mpsc::channel();
+
+        // Start first daemon instance
+        let daemon_dir1 = dir.path().to_path_buf();
+        let daemon_handle1 = thread::spawn(move || start_daemon(daemon_dir1, shutdown_rx1));
+
+        // Give first daemon time to start and acquire lock
+        thread::sleep(Duration::from_millis(200));
+
+        // Try to start second daemon instance - should fail
+        let daemon_dir2 = dir.path().to_path_buf();
+        let daemon_handle2 = thread::spawn(move || start_daemon(daemon_dir2, shutdown_rx2));
+
+        // Give second daemon time to try to start
+        thread::sleep(Duration::from_millis(200));
+
+        // Check if second daemon failed to start
+        let daemon2_result = daemon_handle2.join().unwrap();
+        assert!(daemon2_result.is_err(), "Second daemon should fail to start");
+
+        // Verify the error is about another instance running
+        let error = daemon2_result.unwrap_err();
+        assert_eq!(error.kind(), io::ErrorKind::AlreadyExists);
+
+        // Shutdown first daemon
+        shutdown_tx1.send(()).unwrap();
+
+        // Wait for first daemon to finish
+        let daemon1_result = daemon_handle1.join().unwrap();
+        assert!(daemon1_result.is_ok(), "First daemon should complete successfully");
+
+        // Now try to start a third daemon - should succeed
+        let (shutdown_tx3, shutdown_rx3) = mpsc::channel();
+        let daemon_dir3 = dir.path().to_path_buf();
+        let daemon_handle3 = thread::spawn(move || start_daemon(daemon_dir3, shutdown_rx3));
+
+        // Give third daemon time to start
+        thread::sleep(Duration::from_millis(200));
+
+        // Shutdown third daemon
+        shutdown_tx3.send(()).unwrap();
+
+        // Wait for third daemon to finish
+        let daemon3_result = daemon_handle3.join().unwrap();
+        assert!(daemon3_result.is_ok(), "Third daemon should complete successfully");
     }
 
     #[test]

@@ -20,6 +20,11 @@ This file provides guidance to agentic coding agents like [Claude Code](https://
 The project follows standard Rust library structure:
 - `src/lib.rs` - Main library file containing public functions and tests
 - `src/main.rs` - CLI interface using clap for command-line argument parsing
+- `src/agents.rs` - AGENTS.md file creation and migration functionality
+- `src/autostart.rs` - Cross-platform autostart management
+- `src/daemon.rs` - File watching daemon with single instance enforcement
+- `src/single_instance.rs` - PID file locking for single instance enforcement
+- `src/symlinks.rs` - Symlink creation and rules directory management
 - `Cargo.toml` - Project configuration and dependencies
 
 ### Core Functions
@@ -28,11 +33,12 @@ The codebase provides the following main functionality:
 
 1. **`create_agents_file()`** - Creates AGENTS.md files with case-insensitive checks and handles migration from existing CLAUDE.md or GEMINI.md files
 2. **`create_symlinks()`** - Creates symlinks from CLAUDE.md and GEMINI.md to AGENTS.md, and migrates files from .cursor/rules and .windsurf/rules to .rules directory
-3. **`start_daemon()`** - Starts a file watching daemon that monitors .rules directory and maintains synchronized symlinks in .cursor/rules and .windsurf/rules
+3. **`start_daemon()`** - Starts a file watching daemon that monitors .rules directory and maintains synchronized symlinks in .cursor/rules and .windsurf/rules. Enforces single instance operation using PID file locking.
 4. **`enable_autostart()`** - Enables cross-platform autostart for the daemon using the auto-launch crate
 5. **`disable_autostart()`** - Disables autostart for the daemon
 6. **`is_autostart_enabled()`** - Checks if autostart is currently enabled
-7. **Helper functions**:
+7. **`SingleInstanceLock`** - Provides PID file locking mechanism to ensure only one daemon instance runs at a time
+8. **Helper functions**:
    - `ensure_rules_directory_exists()` - Creates .rules directory if it doesn't exist
    - `remove_existing_symlinks()` - Removes existing symlink files before creating new ones
    - `move_files_to_rules_dir()` - Moves files from source directories to .rules with conflict handling

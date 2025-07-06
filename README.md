@@ -12,6 +12,9 @@ Known helps you create and manage instruction files for various AI coding assist
 - **Automatic migration**: Renames existing `CLAUDE.md` or `GEMINI.md` files to `AGENTS.md`
 - **Symlink generation**: Creates `CLAUDE.md` and `GEMINI.md` symlinks pointing to `AGENTS.md`
 - **Rules directory management**: Automatically creates `.rules` directory and migrates files from `.cursor/rules` and `.windsurf/rules`
+- **Daemon process**: File watching daemon that maintains synchronized symlinks across IDE rules directories
+- **Single instance enforcement**: Prevents multiple daemon instances from running simultaneously using PID file locking
+- **Cross-platform autostart**: System-level autostart configuration for seamless daemon management
 - **Cross-platform compatibility**: Works on Unix and Windows systems
 - **CLI interface**: Simple command-line tool for project initialization and management
 
@@ -64,6 +67,8 @@ This command will:
 - Monitor the `.rules` directory for changes
 - Automatically create and maintain symlinks in `.cursor/rules` and `.windsurf/rules`
 - Keep the rules directories synchronized with the unified `.rules` directory
+- Enforce single instance operation (only one daemon can run per directory)
+- Create a `.known_daemon.pid` file for process management
 - Run continuously until stopped with Ctrl+C
 
 ### Autostart management
@@ -96,7 +101,7 @@ The autostart feature works cross-platform:
 You can also use Known as a Rust library:
 
 ```rust
-use known::{create_agents_file, create_symlinks, start_daemon, enable_autostart, disable_autostart, is_autostart_enabled};
+use known::{create_agents_file, create_symlinks, start_daemon, enable_autostart, disable_autostart, is_autostart_enabled, SingleInstanceLock};
 
 // Create AGENTS.md file
 create_agents_file()?;
@@ -115,6 +120,10 @@ let enabled = is_autostart_enabled()?;
 
 // Disable autostart
 disable_autostart()?;
+
+// Manual single instance lock management (advanced usage)
+let _lock = SingleInstanceLock::acquire(".")?;  // Acquire lock for current directory
+// Lock is automatically released when _lock goes out of scope
 ```
 
 ## File Structure
@@ -123,12 +132,13 @@ After running `known init` and `known symlink`, your project will have:
 
 ```
 your-project/
-├── AGENTS.md          # Main instruction file
-├── CLAUDE.md          # Symlink to AGENTS.md
-├── GEMINI.md          # Symlink to AGENTS.md
-└── .rules/            # Directory for project-specific rules
-    ├── rule1.txt      # Migrated from .cursor/rules/
-    └── config.toml    # Migrated from .windsurf/rules/
+├── AGENTS.md              # Main instruction file
+├── CLAUDE.md              # Symlink to AGENTS.md
+├── GEMINI.md              # Symlink to AGENTS.md
+├── .known_daemon.pid      # PID file (when daemon is running)
+└── .rules/                # Directory for project-specific rules
+    ├── rule1.txt          # Migrated from .cursor/rules/
+    └── config.toml        # Migrated from .windsurf/rules/
 ```
 
 ## Rules Directory Migration
@@ -139,6 +149,24 @@ Known automatically manages rules directories used by various AI coding assistan
 - **`.windsurf/rules`** → **`.rules`**: Files from Windsurf's rules directory are moved to the unified `.rules` directory
 
 This migration happens automatically when you run `known symlink`. If files with the same name already exist in `.rules`, they will be skipped with a warning message.
+
+## Single Instance Enforcement
+
+The daemon process enforces single instance operation to prevent conflicts and resource contention:
+
+- **PID File Locking**: Uses `.known_daemon.pid` file with exclusive file locking
+- **Automatic Cleanup**: PID file is automatically removed when daemon stops gracefully
+- **Stale Process Detection**: Detects and handles stale PID files from crashed processes
+- **Error Handling**: Provides clear error messages when attempting to start multiple instances
+
+If you try to start a second daemon instance in the same directory, you'll see an error message:
+
+```bash
+$ known daemon
+Error running daemon: Another instance of the daemon is already running
+```
+
+The PID file contains the process ID of the running daemon and is automatically cleaned up when the process stops.
 
 ## Default AGENTS.md Content
 

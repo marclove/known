@@ -9,3 +9,4 @@
 - [x] When running the `symlink` command, move any files that exist in the `${cwd}/.windsurf/rules` to the `${cwd}.rules` directory. If any of the files already exist, print a user-friendly warning to STDOUT and skip the file.
 - [x] Add a CLI command that launches a process that acts as a daemon, watching all the files in `${cwd}.rules` directory and maintaining always-accurate symlinks in the directories `${cwd}/.cursor/rules` and `${cwd}/.windsurf/rules`. This should allow the user to only have to manage rules directory in `${cwd}.rules` and know that the particular IDE rules directories were always kept in sync. The should only require actions when rules files are added or removed from the `${cwd}.rules` directory.
 - [x] Add the [auto-launch crate](https://crates.io/crates/auto-launch) and implement cross-platform autostart of the daemon CLI command.
+- [x] Enforce that only one instnace autolaunched process can be running at any time.
