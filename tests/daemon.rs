@@ -1,14 +1,24 @@
 use assert_cmd::prelude::*;
 use predicates::prelude::*;
+use std::path::Path;
 use std::process::Command;
 use std::thread;
 use std::time::Duration;
 use tempfile::tempdir;
 
+fn cleanup_config(home_dir: &Path) {
+    let config_dir = home_dir.join(".config").join("known");
+    if config_dir.exists() {
+        std::fs::remove_dir_all(&config_dir).ok();
+    }
+}
+
 #[test]
 fn test_daemon_commands() {
     let temp_dir = tempdir().unwrap();
     let home_dir = temp_dir.path();
+
+    cleanup_config(home_dir);
 
     // Start the daemon
     let mut start_cmd = Command::cargo_bin("known").unwrap();
@@ -60,9 +70,11 @@ fn test_daemon_full_lifecycle() {
     let temp_dir = tempdir().unwrap();
     let home_dir = temp_dir.path();
 
+    cleanup_config(home_dir);
+
     // Create a test project directory
     let project_dir = temp_dir.path().join("test_project");
-    std::fs::create_dir(&project_dir).unwrap();
+    std::fs::create_dir_all(&project_dir).unwrap();
     std::fs::write(
         project_dir.join("AGENTS.md"),
         "# Test Project\n\nTest content",
@@ -167,6 +179,8 @@ fn test_daemon_file_watching() {
     let temp_dir = tempdir().unwrap();
     let home_dir = temp_dir.path();
 
+    cleanup_config(home_dir);
+
     // Create test project structure
     let project_dir = temp_dir.path().join("watched_project");
     std::fs::create_dir_all(&project_dir).unwrap();
@@ -238,6 +252,8 @@ fn test_daemon_file_watching() {
 fn test_daemon_multiple_projects() {
     let temp_dir = tempdir().unwrap();
     let home_dir = temp_dir.path();
+
+    cleanup_config(home_dir);
 
     // Create multiple test projects
     let project1 = temp_dir.path().join("project1");
