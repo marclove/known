@@ -322,4 +322,20 @@ mod tests {
         assert_eq!(content3, "existing agents content");
         assert!(claude_path2.exists()); // CLAUDE.md should remain untouched
     }
+
+    #[test]
+    fn test_create_agents_file_permission_denied() {
+        let temp_dir = tempdir().unwrap();
+        let readonly_dir = temp_dir.path().join("readonly");
+        fs::create_dir(&readonly_dir).unwrap();
+        let mut perms = fs::metadata(&readonly_dir).unwrap().permissions();
+        perms.set_readonly(true);
+        fs::set_permissions(&readonly_dir, perms).unwrap();
+
+        let result = create_agents_file_in_dir(&readonly_dir);
+        assert!(result.is_err());
+        if let Err(e) = result {
+            assert_eq!(e.kind(), io::ErrorKind::PermissionDenied);
+        }
+    }
 }
