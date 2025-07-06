@@ -29,3 +29,10 @@
 - **Global State Isolation**: Tests that modify global state (like configuration files) should use isolated test-specific functions. Create variants that accept parameters (config, file paths) instead of reading from global state. Example: instead of using `add_directory_to_config()` which modifies the system config, create `add_directory_to_config_file(dir_path, config_path)` for tests to use with temporary config files
 - **Lock Contention**: System-wide locks (like `SingleInstanceLock::acquire()`) can cause parallel test failures. Provide lock-free test variants for unit testing the core logic without the locking mechanism
 - **Eliminating serial_test**: By properly isolating global state access, tests can run in parallel without `#[serial_test::serial]` annotations, improving test performance and reducing dependencies
+
+## CLI Testing with assert_cmd
+- **Current Directory Issues**: Using `.current_dir()` with `assert_cmd` can cause "No such file or directory (os error 2)" errors in CI environments when the spawned process can't resolve the current directory
+- **Solution: CLI Arguments**: Instead of relying on `std::env::current_dir()` in CLI commands, provide optional directory arguments that allow explicit path specification
+- **Backward Compatibility**: When adding directory arguments to CLI commands, make them optional to maintain backward compatibility - commands default to current directory when no argument is provided
+- **Test Pattern**: Update integration tests to use explicit directory arguments (`.arg(&project_dir)`) rather than setting working directory (`.current_dir(&project_dir)`)
+- **Example Fix**: Convert `known add` from relying on current directory to accepting `known add [DIRECTORY]` where the directory parameter is optional

@@ -93,9 +93,9 @@ fn test_daemon_full_lifecycle() {
     // Add the project to the configuration
     let mut add_cmd = Command::cargo_bin("known").unwrap();
     add_cmd
-        .current_dir(&project_dir)
         .env("HOME", home_dir)
         .arg("add")
+        .arg(&project_dir)
         .assert()
         .success();
 
@@ -203,9 +203,9 @@ fn test_daemon_file_watching() {
     // Add the project to configuration
     let mut add_cmd = Command::cargo_bin("known").unwrap();
     add_cmd
-        .current_dir(&project_dir)
         .env("HOME", home_dir)
         .arg("add")
+        .arg(&project_dir)
         .assert()
         .success();
 
@@ -263,13 +263,17 @@ fn test_daemon_multiple_projects() {
         std::fs::create_dir_all(project).unwrap();
         std::fs::create_dir_all(project.join(".rules")).unwrap();
         std::fs::write(project.join("AGENTS.md"), "# Test Project").unwrap();
+        
+        // Ensure directory exists and is accessible
+        assert!(project.exists(), "Project directory should exist: {}", project.display());
+        assert!(project.is_dir(), "Project path should be a directory: {}", project.display());
 
         // Add project to configuration
         let mut add_cmd = Command::cargo_bin("known").unwrap();
         add_cmd
-            .current_dir(project)
             .env("HOME", home_dir)
             .arg("add")
+            .arg(project)
             .assert()
             .success();
     }
@@ -303,9 +307,9 @@ fn test_daemon_multiple_projects() {
     // Remove one project from configuration
     let mut remove_cmd = Command::cargo_bin("known").unwrap();
     remove_cmd
-        .current_dir(&project1)
         .env("HOME", home_dir)
         .arg("remove")
+        .arg(&project1)
         .assert()
         .success();
 

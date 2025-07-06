@@ -70,6 +70,8 @@ The codebase provides the following main functionality:
 - `known start` - Start daemon that watches all configured directories from the configuration file and maintains symlinks in .cursor/rules and .windsurf/rules
 - `known run-daemon` - Internal command used by `start` to actually run the daemon process (users should use `start` instead)
 - `known stop` - Stop the daemon process
+- `known add [DIRECTORY]` - Add current working directory (or specified directory) to the list of watched directories
+- `known remove [DIRECTORY]` - Remove current working directory (or specified directory) from the list of watched directories
 - `known enable-autostart` - Enable autostart for the daemon
 - `known disable-autostart` - Disable autostart for the daemon
 - `known autostart-status` - Check if autostart is enabled

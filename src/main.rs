@@ -33,10 +33,18 @@ enum Commands {
     DisableAutostart,
     /// Check if autostart is enabled
     AutostartStatus,
-    /// Add current working directory to the list of watched directories
-    Add,
-    /// Remove current working directory from the list of watched directories
-    Remove,
+    /// Add current working directory (or specified directory) to the list of watched directories
+    Add {
+        /// Directory path to add (defaults to current working directory)
+        #[arg(value_name = "DIRECTORY")]
+        directory: Option<std::path::PathBuf>,
+    },
+    /// Remove current working directory (or specified directory) from the list of watched directories
+    Remove {
+        /// Directory path to remove (defaults to current working directory)
+        #[arg(value_name = "DIRECTORY")]
+        directory: Option<std::path::PathBuf>,
+    },
     /// Stop the daemon process
     Stop,
 }
@@ -155,26 +163,29 @@ fn main() {
                 process::exit(1);
             }
         },
-        Commands::Add => {
-            let current_dir = match std::env::current_dir() {
-                Ok(dir) => dir,
-                Err(e) => {
-                    eprintln!("Error getting current directory: {}", e);
-                    process::exit(1);
-                }
+        Commands::Add { directory } => {
+            let target_dir = match directory {
+                Some(dir) => dir.clone(),
+                None => match std::env::current_dir() {
+                    Ok(dir) => dir,
+                    Err(e) => {
+                        eprintln!("Error getting current directory: {}", e);
+                        process::exit(1);
+                    }
+                },
             };
 
-            match add_directory_to_config(&current_dir) {
+            match add_directory_to_config(&target_dir) {
                 Ok(added) => {
                     if added {
                         println!(
                             "Successfully added '{}' to watched directories",
-                            current_dir.display()
+                            target_dir.display()
                         );
                     } else {
                         println!(
                             "Directory '{}' is already in the watched directories list",
-                            current_dir.display()
+                            target_dir.display()
                         );
                     }
                 }
@@ -184,26 +195,29 @@ fn main() {
                 }
             }
         }
-        Commands::Remove => {
-            let current_dir = match std::env::current_dir() {
-                Ok(dir) => dir,
-                Err(e) => {
-                    eprintln!("Error getting current directory: {}", e);
-                    process::exit(1);
-                }
+        Commands::Remove { directory } => {
+            let target_dir = match directory {
+                Some(dir) => dir.clone(),
+                None => match std::env::current_dir() {
+                    Ok(dir) => dir,
+                    Err(e) => {
+                        eprintln!("Error getting current directory: {}", e);
+                        process::exit(1);
+                    }
+                },
             };
 
-            match remove_directory_from_config(&current_dir) {
+            match remove_directory_from_config(&target_dir) {
                 Ok(removed) => {
                     if removed {
                         println!(
                             "Successfully removed '{}' from watched directories",
-                            current_dir.display()
+                            target_dir.display()
                         );
                     } else {
                         println!(
                             "Directory '{}' was not in the watched directories list",
-                            current_dir.display()
+                            target_dir.display()
                         );
                     }
                 }

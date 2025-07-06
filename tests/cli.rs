@@ -26,9 +26,9 @@ fn test_add_command() {
     std::fs::create_dir(&project_dir).unwrap();
 
     // Test `add` command
-    cmd.current_dir(&project_dir)
-        .env("HOME", temp_dir.path())
-        .arg("add");
+    cmd.env("HOME", temp_dir.path())
+        .arg("add")
+        .arg(&project_dir);
 
     cmd.assert()
         .success()
@@ -45,15 +45,15 @@ fn test_remove_command() {
     // First, add the directory
     let mut add_cmd = Command::cargo_bin("known").unwrap();
     add_cmd
-        .current_dir(&project_dir)
         .env("HOME", temp_dir.path())
-        .arg("add");
+        .arg("add")
+        .arg(&project_dir);
     add_cmd.assert().success();
 
     // Then, test the `remove` command
-    cmd.current_dir(&project_dir)
-        .env("HOME", temp_dir.path())
-        .arg("remove");
+    cmd.env("HOME", temp_dir.path())
+        .arg("remove")
+        .arg(&project_dir);
 
     cmd.assert()
         .success()

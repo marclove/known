@@ -55,21 +55,47 @@ This command will:
 - Move any files from `.windsurf/rules` to `.rules` directory
 - Skip files that already exist in `.rules` with a user-friendly warning
 
+### Manage watched directories
+
+Add a directory to be watched by the daemon:
+
+```bash
+known add [DIRECTORY]
+```
+
+If no directory is specified, the current working directory is used. This command will:
+- Add the specified directory to the daemon's configuration
+- Enable the daemon to watch the `.rules` directory within that project
+
+Remove a directory from being watched:
+
+```bash
+known remove [DIRECTORY]
+```
+
+If no directory is specified, the current working directory is used.
+
 ### Start daemon
 
 Start a file watching daemon to automatically maintain symlinks:
 
 ```bash
-known daemon
+known start
 ```
 
 This command will:
-- Monitor the `.rules` directory for changes
+- Monitor all configured directories' `.rules` subdirectories for changes
 - Automatically create and maintain symlinks in `.cursor/rules` and `.windsurf/rules`
 - Keep the rules directories synchronized with the unified `.rules` directory
 - Enforce system-wide single instance operation (only one daemon can run across the entire system)
 - Create a centralized PID file for process management
-- Run continuously until stopped with Ctrl+C
+- Run continuously until stopped
+
+Stop the daemon:
+
+```bash
+known stop
+```
 
 ### Autostart management
 
