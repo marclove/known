@@ -11,3 +11,10 @@
 - When manually testing CLI functionality, stay within the project's working directory structure
 - Unit tests using `tempfile::tempdir()` work correctly - they create temp directories in accessible locations
 - Don't confuse manual CLI testing limitations with unit test capabilities - they use different mechanisms
+
+## File System Watching with notify Crate
+- On macOS, file system events may return paths with `/private` prefix while the watched directory path doesn't have this prefix
+- Always canonicalize paths before comparing them in file watchers to handle symlinks and path resolution differences
+- The `notify` crate requires proper path matching - use `path.starts_with(canonical_path)` for reliable event filtering
+- File creation events often generate multiple events (Create, Modify metadata, Modify content) - handle all relevant event types
+- Use `RecursiveMode::NonRecursive` when only watching direct files in a directory, not subdirectories
