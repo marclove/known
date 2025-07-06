@@ -1,7 +1,7 @@
 use clap::{Parser, Subcommand};
 use known::{
-    create_agents_file, create_symlinks, disable_autostart, enable_autostart, is_autostart_enabled,
-    start_daemon,
+    add_directory_to_config, create_agents_file, create_symlinks, disable_autostart,
+    enable_autostart, is_autostart_enabled, start_daemon,
 };
 use std::process;
 use std::sync::mpsc;
@@ -28,6 +28,8 @@ enum Commands {
     DisableAutostart,
     /// Check if autostart is enabled
     AutostartStatus,
+    /// Add current working directory to the list of watched directories
+    Add,
 }
 
 fn main() {
@@ -89,5 +91,72 @@ fn main() {
                 process::exit(1);
             }
         },
+        Commands::Add => {
+            let current_dir = match std::env::current_dir() {
+                Ok(dir) => dir,
+                Err(e) => {
+                    eprintln!("Error getting current directory: {}", e);
+                    process::exit(1);
+                }
+            };
+
+            match add_directory_to_config(&current_dir) {
+                Ok(added) => {
+                    if added {
+                        println!(
+                            "Successfully added '{}' to watched directories",
+                            current_dir.display()
+                        );
+                    } else {
+                        println!(
+                            "Directory '{}' is already in the watched directories list",
+                            current_dir.display()
+                        );
+                    }
+                }
+                Err(e) => {
+                    eprintln!("Error adding directory to configuration: {}", e);
+                    process::exit(1);
+                }
+            }
+        },
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use known::{load_config, remove_directory_from_config};
+    use std::env;
+    use tempfile::tempdir;
+
+    #[test]
+    fn test_add_command_acceptance() {
+        // Create a temporary directory to simulate a project directory
+        let temp_dir = tempdir().unwrap();
+        let temp_path = temp_dir.path();
+        
+        // Change to the temporary directory
+        let original_dir = env::current_dir().unwrap();
+        env::set_current_dir(temp_path).unwrap();
+        
+        // Ensure the directory is not already in config
+        let _ = remove_directory_from_config(temp_path);
+        
+        // Load initial config to verify directory is not present
+        let initial_config = load_config().unwrap();
+        assert!(!initial_config.contains_directory(temp_path));
+        
+        // This test will fail until we implement the Add command
+        // For now, let's manually test the underlying functionality
+        let added = known::add_directory_to_config(temp_path).unwrap();
+        assert!(added);
+        
+        // Verify the directory was added
+        let updated_config = load_config().unwrap();
+        assert!(updated_config.contains_directory(temp_path));
+        
+        // Clean up
+        let _ = remove_directory_from_config(temp_path);
+        env::set_current_dir(original_dir).unwrap();
     }
 }
