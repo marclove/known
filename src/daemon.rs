@@ -65,12 +65,38 @@ const WINDSURF_RULES_DIR: &str = ".windsurf/rules";
 /// - Unable to determine application directories for this platform
 ///
 pub fn start_daemon(shutdown_rx: mpsc::Receiver<()>) -> io::Result<()> {
+    // Load configuration to get directories to watch
+    let config = load_config()?;
+    start_daemon_with_config(shutdown_rx, config)
+}
+
+/// Starts a daemon with a custom configuration (for testing)
+/// This version skips the single instance lock to allow parallel testing
+#[cfg(test)]
+pub fn start_daemon_with_test_config(
+    shutdown_rx: mpsc::Receiver<()>,
+    config: crate::config::Config,
+) -> io::Result<()> {
+    start_daemon_with_config_no_lock(shutdown_rx, config)
+}
+
+/// Internal function that handles the actual daemon logic with a given config
+fn start_daemon_with_config(
+    shutdown_rx: mpsc::Receiver<()>,
+    config: crate::config::Config,
+) -> io::Result<()> {
     // Acquire system-wide single instance lock first
     let _lock = SingleInstanceLock::acquire()?;
     println!("Acquired system-wide single instance lock");
 
-    // Load configuration to get directories to watch
-    let config = load_config()?;
+    start_daemon_with_config_no_lock(shutdown_rx, config)
+}
+
+/// Internal function that handles the daemon logic without acquiring a lock (for testing)
+fn start_daemon_with_config_no_lock(
+    shutdown_rx: mpsc::Receiver<()>,
+    config: crate::config::Config,
+) -> io::Result<()> {
     let watched_directories = config.get_watched_directories();
 
     if watched_directories.is_empty() {
@@ -329,7 +355,7 @@ fn sync_rules_directory(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::{save_config, Config};
+    use crate::config::Config;
     use tempfile::tempdir;
 
     #[test]
@@ -457,26 +483,18 @@ mod tests {
     }
 
     #[test]
-    #[serial_test::serial]
     fn test_daemon_no_configured_directories() {
-        // Create empty config
+        // Create empty config (no need to save to file system)
         let config = Config::new();
-
-        // Temporarily save empty config for test
-        let original_config = crate::config::load_config().unwrap_or_default();
-        save_config(&config).unwrap();
 
         // Create channel for shutdown signal
         let (_shutdown_tx, shutdown_rx) = mpsc::channel();
 
-        // Start daemon - should complete immediately with no directories
-        let result = start_daemon(shutdown_rx);
+        // Start daemon with test config - should complete immediately with no directories
+        let result = start_daemon_with_test_config(shutdown_rx, config);
         assert!(
             result.is_ok(),
             "Daemon should handle empty config gracefully"
         );
-
-        // Restore original config
-        save_config(&original_config).unwrap();
     }
 }
