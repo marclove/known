@@ -177,6 +177,17 @@ fn main() {
                 },
             };
 
+            // Validate that the directory exists
+            if !target_dir.exists() {
+                eprintln!("Error: Directory '{}' does not exist", target_dir.display());
+                process::exit(1);
+            }
+
+            if !target_dir.is_dir() {
+                eprintln!("Error: '{}' is not a directory", target_dir.display());
+                process::exit(1);
+            }
+
             match add_directory_to_config(&target_dir) {
                 Ok(added) => {
                     if added {

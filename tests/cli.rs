@@ -20,58 +20,111 @@ fn test_init_command() {
 
 #[test]
 fn test_add_command() {
-    let mut cmd = Command::cargo_bin("known").unwrap();
     let temp_dir = tempdir().unwrap();
     let project_dir = temp_dir.path().join("project");
     std::fs::create_dir(&project_dir).unwrap();
 
-    // Create the config directory structure that the directories crate expects
-    let config_dir = temp_dir.path().join(".config").join("known");
+    // Determine what config directory the directories crate would actually use
+    // with our custom HOME environment
+    let config_dir = if cfg!(target_os = "macos") {
+        temp_dir.path().join("Library").join("Application Support").join("known")
+    } else {
+        temp_dir.path().join(".config").join("known")
+    };
     std::fs::create_dir_all(&config_dir).unwrap();
 
+    // Log environment details for CI debugging
+    println!("Test environment:");
+    println!("  temp_dir: {}", temp_dir.path().display());
+    println!("  project_dir: {}", project_dir.display());
+    println!("  config_dir: {}", config_dir.display());
+    println!("  project_dir.exists(): {}", project_dir.exists());
+    println!("  config_dir.exists(): {}", config_dir.exists());
+    println!("  temp_dir.path().exists(): {}", temp_dir.path().exists());
+
+    // Verify directories exist before running command
+    assert!(project_dir.exists(), "Project directory should exist");
+    assert!(config_dir.exists(), "Config directory should exist");
+
     // Test `add` command
+    let mut cmd = Command::cargo_bin("known").unwrap();
     cmd.env("HOME", temp_dir.path())
+        .env("CI", "1")  // Force CI environment for debug logging
         .arg("add")
         .arg(&project_dir);
 
-    cmd.assert()
+    println!("Running command: known add {}", project_dir.display());
+    println!("With HOME={}", temp_dir.path().display());
+    
+    // Check what config path would be resolved with our HOME override
+    println!("Expected config path: {}", config_dir.join("config.json").display());
+
+    let result = cmd.assert();
+    
+    // Log any stderr for debugging
+    println!("Command completed, checking output...");
+    
+    result
         .success()
         .stdout(predicate::str::contains("Successfully added"));
+    
+    println!("test_add_command completed successfully");
 }
 
 #[test]
 fn test_remove_command() {
-    let mut cmd = Command::cargo_bin("known").unwrap();
     let temp_dir = tempdir().unwrap();
     let project_dir = temp_dir.path().join("project");
     std::fs::create_dir(&project_dir).unwrap();
 
-    // Create the config directory structure that the directories crate expects
-    let config_dir = temp_dir.path().join(".config").join("known");
+    // Determine what config directory the directories crate would actually use
+    // with our custom HOME environment
+    let config_dir = if cfg!(target_os = "macos") {
+        temp_dir.path().join("Library").join("Application Support").join("known")
+    } else {
+        temp_dir.path().join(".config").join("known")
+    };
     std::fs::create_dir_all(&config_dir).unwrap();
 
-    // Verify project directory exists before testing
-    assert!(
-        project_dir.exists(),
-        "Project directory should exist before running add command"
-    );
+    // Log environment details for CI debugging
+    println!("Test environment:");
+    println!("  temp_dir: {}", temp_dir.path().display());
+    println!("  project_dir: {}", project_dir.display());
+    println!("  config_dir: {}", config_dir.display());
+    println!("  project_dir.exists(): {}", project_dir.exists());
+    println!("  config_dir.exists(): {}", config_dir.exists());
+
+    // Verify directories exist before testing
+    assert!(project_dir.exists(), "Project directory should exist");
+    assert!(config_dir.exists(), "Config directory should exist");
 
     // First, add the directory
+    println!("Running add command: known add {}", project_dir.display());
     let mut add_cmd = Command::cargo_bin("known").unwrap();
     add_cmd
         .env("HOME", temp_dir.path())
+        .env("CI", "1")  // Force CI environment for debug logging
         .arg("add")
         .arg(&project_dir);
-    add_cmd.assert().success();
+    
+    add_cmd.assert()
+        .success()
+        .stdout(predicate::str::contains("Successfully added"));
+    println!("Add command completed successfully");
 
     // Then, test the `remove` command
-    cmd.env("HOME", temp_dir.path())
+    println!("Running remove command: known remove {}", project_dir.display());
+    let mut remove_cmd = Command::cargo_bin("known").unwrap();
+    remove_cmd.env("HOME", temp_dir.path())
+        .env("CI", "1")  // Force CI environment for debug logging
         .arg("remove")
         .arg(&project_dir);
 
-    cmd.assert()
+    remove_cmd.assert()
         .success()
         .stdout(predicate::str::contains("Successfully removed"));
+    
+    println!("test_remove_command completed successfully");
 }
 
 #[test]
@@ -82,8 +135,13 @@ fn test_symlink_command() {
     std::fs::create_dir(&project_dir).unwrap();
     std::fs::write(project_dir.join("AGENTS.md"), "test content").unwrap();
 
-    // Create the config directory structure that the directories crate expects
-    let config_dir = temp_dir.path().join(".config").join("known");
+    // Determine what config directory the directories crate would actually use
+    // with our custom HOME environment
+    let config_dir = if cfg!(target_os = "macos") {
+        temp_dir.path().join("Library").join("Application Support").join("known")
+    } else {
+        temp_dir.path().join(".config").join("known")
+    };
     std::fs::create_dir_all(&config_dir).unwrap();
 
     cmd.current_dir(&project_dir)

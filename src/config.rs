@@ -102,7 +102,15 @@ pub fn get_config_file_path() -> io::Result<PathBuf> {
     // Try to use platform-specific directories first
     if let Some(project_dirs) = ProjectDirs::from("", "", "known") {
         let config_dir = project_dirs.config_dir();
-        return Ok(config_dir.join(CONFIG_FILE_NAME));
+        let config_path = config_dir.join(CONFIG_FILE_NAME);
+        
+        // Debug logging for CI diagnostics
+        if std::env::var("CI").is_ok() || std::env::var("GITHUB_ACTIONS").is_ok() {
+            eprintln!("DEBUG: Using platform-specific config path: {}", config_path.display());
+            eprintln!("DEBUG: Platform-specific config dir: {}", config_dir.display());
+        }
+        
+        return Ok(config_path);
     }
 
     // Fallback: use HOME/.config/known/config.json for CI environments and other edge cases
@@ -114,7 +122,15 @@ pub fn get_config_file_path() -> io::Result<PathBuf> {
     })?;
 
     let config_dir = Path::new(&home_dir).join(".config").join("known");
-    Ok(config_dir.join(CONFIG_FILE_NAME))
+    let config_path = config_dir.join(CONFIG_FILE_NAME);
+    
+    // Debug logging for CI diagnostics
+    if std::env::var("CI").is_ok() || std::env::var("GITHUB_ACTIONS").is_ok() {
+        eprintln!("DEBUG: Using fallback config path: {}", config_path.display());
+        eprintln!("DEBUG: HOME={}", home_dir);
+    }
+    
+    Ok(config_path)
 }
 
 /// Loads configuration from the configuration file
@@ -210,9 +226,28 @@ where
 {
     let config_path = get_config_file_path()?;
 
+    // Debug logging for CI diagnostics
+    if std::env::var("CI").is_ok() || std::env::var("GITHUB_ACTIONS").is_ok() {
+        eprintln!("DEBUG: modify_config_safely called with config_path: {}", config_path.display());
+        if let Some(parent) = config_path.parent() {
+            eprintln!("DEBUG: Config parent directory: {}", parent.display());
+            eprintln!("DEBUG: Config parent exists: {}", parent.exists());
+        }
+    }
+
     // Create the configuration directory if it doesn't exist
     if let Some(parent) = config_path.parent() {
-        fs::create_dir_all(parent)?;
+        fs::create_dir_all(parent).map_err(|e| {
+            // Enhanced error for CI debugging
+            if std::env::var("CI").is_ok() || std::env::var("GITHUB_ACTIONS").is_ok() {
+                eprintln!("DEBUG: Failed to create config directory {}: {}", parent.display(), e);
+            }
+            e
+        })?;
+        
+        if std::env::var("CI").is_ok() || std::env::var("GITHUB_ACTIONS").is_ok() {
+            eprintln!("DEBUG: Successfully created config directory: {}", parent.display());
+        }
     }
 
     // Read the current configuration
