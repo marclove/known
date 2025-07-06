@@ -20,14 +20,12 @@ fn main() {
     let cli = Cli::parse();
 
     match &cli.command {
-        Commands::Init => {
-            match create_agents_file() {
-                Ok(()) => println!("Successfully initialized project with AGENTS.md"),
-                Err(e) => {
-                    eprintln!("Error creating AGENTS.md: {}", e);
-                    process::exit(1);
-                }
+        Commands::Init => match create_agents_file() {
+            Ok(()) => println!("Successfully initialized project with AGENTS.md"),
+            Err(e) => {
+                eprintln!("Error creating AGENTS.md: {}", e);
+                process::exit(1);
             }
-        }
+        },
     }
 }

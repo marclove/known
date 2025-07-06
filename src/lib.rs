@@ -11,14 +11,17 @@ use std::path::Path;
 const AGENTS_FILENAME: &str = "AGENTS.md";
 
 /// The filename for the claude instruction file (uppercase)
-#[allow(dead_code)]  
+#[allow(dead_code)]
 const CLAUDE_FILENAME: &str = "CLAUDE.md";
 
-/// The lowercase version of the agents filename for case-insensitive matching
-const AGENTS_FILENAME_LOWER: &str = "agents.md";
+/// The filename for the gemini instruction file (uppercase)
+#[allow(dead_code)]
+const GEMINI_FILENAME: &str = "GEMINI.md";
 
-/// The lowercase version of the claude filename for case-insensitive matching
-const CLAUDE_FILENAME_LOWER: &str = "claude.md";
+/// Helper function to convert filename to lowercase for case-insensitive comparisons
+fn to_lowercase(filename: &str) -> String {
+    filename.to_lowercase()
+}
 
 /// Creates an AGENTS.md file in the current working directory.
 ///
@@ -58,7 +61,9 @@ pub fn create_agents_file() -> io::Result<()> {
 /// 1. Scans the directory for existing files (case-insensitive)
 /// 2. If `agents.md` exists in any case variation, returns successfully without changes
 /// 3. If `claude.md` exists, renames it to `AGENTS.md`
-/// 4. Otherwise, creates an empty `AGENTS.md` file
+/// 4. If `gemini.md` exists, renames it to `AGENTS.md`
+/// 5. If both `claude.md` and `gemini.md` exist, creates empty `AGENTS.md` and prints instructions
+/// 6. Otherwise, creates an empty `AGENTS.md` file
 ///
 /// # Errors
 ///
@@ -72,17 +77,20 @@ pub fn create_agents_file_in_dir<P: AsRef<Path>>(dir: P) -> io::Result<()> {
 
     let mut agents_exists = false;
     let mut claude_path = None;
+    let mut gemini_path = None;
 
     for entry in fs::read_dir(dir)? {
         let entry = entry?;
         let file_name = entry.file_name();
         let file_name_str = file_name.to_string_lossy().to_lowercase();
 
-        if file_name_str == AGENTS_FILENAME_LOWER {
+        if file_name_str == to_lowercase(AGENTS_FILENAME) {
             agents_exists = true;
             break;
-        } else if file_name_str == CLAUDE_FILENAME_LOWER {
+        } else if file_name_str == to_lowercase(CLAUDE_FILENAME) {
             claude_path = Some(entry.path());
+        } else if file_name_str == to_lowercase(GEMINI_FILENAME) {
+            gemini_path = Some(entry.path());
         }
     }
 
@@ -92,10 +100,26 @@ pub fn create_agents_file_in_dir<P: AsRef<Path>>(dir: P) -> io::Result<()> {
 
     let agents_path = dir.join(AGENTS_FILENAME);
 
-    if let Some(claude_file) = claude_path {
-        fs::rename(claude_file, agents_path)?;
-    } else {
-        fs::write(agents_path, "")?;
+    match (claude_path, gemini_path) {
+        (Some(_), Some(_)) => {
+            // Both CLAUDE.md and GEMINI.md exist
+            fs::write(agents_path, "")?;
+            println!("Found both CLAUDE.md and GEMINI.md files in the directory.");
+            println!("An empty AGENTS.md file has been created.");
+            println!("Please manually copy the content from CLAUDE.md and GEMINI.md into AGENTS.md as needed.");
+        }
+        (Some(claude_file), None) => {
+            // Only CLAUDE.md exists
+            fs::rename(claude_file, agents_path)?;
+        }
+        (None, Some(gemini_file)) => {
+            // Only GEMINI.md exists
+            fs::rename(gemini_file, agents_path)?;
+        }
+        (None, None) => {
+            // Neither exists
+            fs::write(agents_path, "")?;
+        }
     }
 
     Ok(())
@@ -156,5 +180,46 @@ mod tests {
 
         let content = fs::read_to_string(&agents_path).unwrap();
         assert_eq!(content, "existing content");
+    }
+
+    #[test]
+    fn test_rename_gemini_to_agents() {
+        let dir = tempdir().unwrap();
+
+        let gemini_path = dir.path().join(GEMINI_FILENAME);
+        fs::write(&gemini_path, "# Gemini content").unwrap();
+
+        let result = create_agents_file_in_dir(dir.path());
+        assert!(result.is_ok());
+
+        let agents_path = dir.path().join(AGENTS_FILENAME);
+
+        assert!(agents_path.exists());
+        assert!(!gemini_path.exists());
+
+        let content = fs::read_to_string(&agents_path).unwrap();
+        assert_eq!(content, "# Gemini content");
+    }
+
+    #[test]
+    fn test_both_claude_and_gemini_exist() {
+        let dir = tempdir().unwrap();
+
+        let claude_path = dir.path().join(CLAUDE_FILENAME);
+        let gemini_path = dir.path().join(GEMINI_FILENAME);
+        fs::write(&claude_path, "# Claude content").unwrap();
+        fs::write(&gemini_path, "# Gemini content").unwrap();
+
+        let result = create_agents_file_in_dir(dir.path());
+        assert!(result.is_ok());
+
+        let agents_path = dir.path().join(AGENTS_FILENAME);
+
+        assert!(agents_path.exists());
+        assert!(claude_path.exists());
+        assert!(gemini_path.exists());
+
+        let content = fs::read_to_string(&agents_path).unwrap();
+        assert_eq!(content, "");
     }
 }
