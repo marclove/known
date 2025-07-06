@@ -25,6 +25,7 @@ enum Commands {
     /// Start daemon to watch all configured directories and maintain symlinks
     Start,
     /// Run daemon process (internal command, used by start)
+    #[clap(hide = true)]
     RunDaemon,
     /// Enable autostart for the daemon
     EnableAutostart,
