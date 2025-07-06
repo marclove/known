@@ -1,7 +1,8 @@
 use clap::{Parser, Subcommand};
 use known::{
     add_directory_to_config, create_agents_file, create_symlinks, disable_autostart,
-    enable_autostart, is_autostart_enabled, start_daemon, stop_daemon,
+    enable_autostart, is_autostart_enabled, remove_directory_from_config, start_daemon,
+    stop_daemon,
 };
 use std::io;
 use std::process::{self, Command, Stdio};
@@ -33,6 +34,8 @@ enum Commands {
     AutostartStatus,
     /// Add current working directory to the list of watched directories
     Add,
+    /// Remove current working directory from the list of watched directories
+    Remove,
     /// Stop the daemon process
     Stop,
 }
@@ -180,6 +183,35 @@ fn main() {
                 }
             }
         }
+        Commands::Remove => {
+            let current_dir = match std::env::current_dir() {
+                Ok(dir) => dir,
+                Err(e) => {
+                    eprintln!("Error getting current directory: {}", e);
+                    process::exit(1);
+                }
+            };
+
+            match remove_directory_from_config(&current_dir) {
+                Ok(removed) => {
+                    if removed {
+                        println!(
+                            "Successfully removed '{}' from watched directories",
+                            current_dir.display()
+                        );
+                    } else {
+                        println!(
+                            "Directory '{}' was not in the watched directories list",
+                            current_dir.display()
+                        );
+                    }
+                }
+                Err(e) => {
+                    eprintln!("Error removing directory from configuration: {}", e);
+                    process::exit(1);
+                }
+            }
+        }
         Commands::Stop => match stop_daemon() {
             Ok(()) => println!("Daemon stopped successfully"),
             Err(e) => {
@@ -287,5 +319,41 @@ mod tests {
 
         // Test passes if we reach this point without panicking
         assert!(true, "stop_daemon function executed without panicking");
+    }
+
+    #[test]
+    fn test_remove_command_acceptance() {
+        // Create a temporary directory to simulate a project directory
+        let temp_dir = tempdir().unwrap();
+        let temp_path = temp_dir.path();
+
+        // Add the directory to config first
+        let added = known::add_directory_to_config(temp_path).unwrap();
+        assert!(added, "Directory should be added to config");
+
+        // Verify it's in the config
+        let config = load_config().unwrap();
+        assert!(
+            config.contains_directory(temp_path),
+            "Directory should be in config"
+        );
+
+        // Now test removing it
+        let removed = known::remove_directory_from_config(temp_path).unwrap();
+        assert!(removed, "Directory should be removed from config");
+
+        // Verify it's no longer in config
+        let updated_config = load_config().unwrap();
+        assert!(
+            !updated_config.contains_directory(temp_path),
+            "Directory should not be in config after removal"
+        );
+
+        // Test removing a directory that's not in config
+        let not_removed = known::remove_directory_from_config(temp_path).unwrap();
+        assert!(
+            !not_removed,
+            "Removing directory not in config should return false"
+        );
     }
 }
