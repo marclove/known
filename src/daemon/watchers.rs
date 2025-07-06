@@ -45,18 +45,16 @@ pub fn setup_all_watchers(
                 "Watching configuration file for changes: {}",
                 config_file_path.display()
             );
+            // Add the config watcher to the watchers vector so it doesn't get dropped
+            watchers.push(config_watcher);
         }
     }
 
     // Set up watchers for initial directories
     setup_directory_watchers(watched_directories, &tx, &mut watchers, &mut rules_paths)?;
 
-    if watchers.is_empty() {
-        return Err(io::Error::new(
-            io::ErrorKind::NotFound,
-            "No valid .rules directories found to watch",
-        ));
-    }
+    // Note: We allow empty watchers now since the daemon should start even with no directories
+    // and just watch the config file for changes
 
     Ok(WatcherSetup {
         watchers,
@@ -234,15 +232,14 @@ mod tests {
         let mut directories = std::collections::HashSet::new();
         directories.insert(nonexistent_dir);
 
-        // This should return an error since no valid directories exist
+        // This should now succeed even with no valid directories, watching only the config file
         let result = setup_all_watchers(&directories);
-        assert!(result.is_err());
+        assert!(result.is_ok());
 
-        if let Err(e) = result {
-            assert_eq!(e.kind(), io::ErrorKind::NotFound);
-            assert!(e
-                .to_string()
-                .contains("No valid .rules directories found to watch"));
+        if let Ok(watcher_setup) = result {
+            assert_eq!(watcher_setup.watchers.len(), 0, "Should have no directory watchers");
+            assert_eq!(watcher_setup.rules_paths.len(), 0, "Should have no rules paths");
+            // Config file watcher is set up separately and not counted in watchers
         }
     }
 

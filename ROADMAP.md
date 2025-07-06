@@ -19,3 +19,4 @@
 - [x] Update the daemon to watch the configuration file for any changes. If a directory is added, it starts watching the added directory.
 - [x] If a directory is removed from the configuration file, the active daemon stops watching the added directory and removes the symlinks in that particular watched directory.
 - [x] Add a `list` CLI command that prints the list of watched directories from the config file.
+- [x] The daemon should start even when there are no `watched_directories` yet (see: `start_daemon_with_config_no_lock`). The daemon is supposed to be watching the configuration file, so it should automatically start watching newly-added directories. That's why we want to run the daemon even if the directories is empty.

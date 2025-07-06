@@ -103,10 +103,10 @@ fn start_daemon_with_config_no_lock(
 
     if watched_directories.is_empty() {
         println!("No directories configured to watch. Use 'known symlink' in project directories to add them.");
-        return Ok(());
+        println!("Daemon started and waiting for directories to be added to the configuration...");
+    } else {
+        print_watched_directories(&watched_directories);
     }
-
-    print_watched_directories(&watched_directories);
 
     let watcher_setup = setup_all_watchers(&watched_directories)?;
 
@@ -153,8 +153,37 @@ mod tests {
         // Start daemon with empty config
         let result = start_daemon_with_test_config(shutdown_rx, config);
 
-        // Should succeed but do nothing
+        // Should succeed and start watching config file
         assert!(result.is_ok());
+    }
+
+    #[test]
+    fn test_daemon_starts_with_empty_config_and_waits() {
+        // Test that daemon starts with empty config and watches for config changes
+        let config_dir = tempdir().unwrap();
+        let config_path = config_dir.path().join("test_config.json");
+
+        // Create empty config file
+        let empty_config = crate::config::Config::new();
+        crate::config::save_config_to_file(&empty_config, &config_path).unwrap();
+
+        let (shutdown_tx, shutdown_rx) = mpsc::channel();
+
+        // Start daemon from empty config file in a separate thread
+        let config_path_clone = config_path.clone();
+        let handle = std::thread::spawn(move || {
+            start_daemon_from_config_file(shutdown_rx, config_path_clone)
+        });
+
+        // Give daemon time to start
+        std::thread::sleep(Duration::from_millis(100));
+
+        // Signal shutdown (may fail if daemon already stopped, which is ok)
+        let _ = shutdown_tx.send(());
+
+        // Wait for daemon to finish
+        let result = handle.join().unwrap();
+        assert!(result.is_ok(), "Daemon should start successfully even with empty config");
     }
 
     #[test]
