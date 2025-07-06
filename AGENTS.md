@@ -22,6 +22,7 @@ The project follows standard Rust library structure:
 - `src/main.rs` - CLI interface using clap for command-line argument parsing
 - `src/agents.rs` - AGENTS.md file creation and migration functionality
 - `src/autostart.rs` - Cross-platform autostart management
+- `src/config.rs` - Configuration file management for tracking watched directories
 - `src/daemon.rs` - File watching daemon with single instance enforcement
 - `src/single_instance.rs` - PID file locking for single instance enforcement
 - `src/symlinks.rs` - Symlink creation and rules directory management
@@ -32,13 +33,19 @@ The project follows standard Rust library structure:
 The codebase provides the following main functionality:
 
 1. **`create_agents_file()`** - Creates AGENTS.md files with case-insensitive checks and handles migration from existing CLAUDE.md or GEMINI.md files
-2. **`create_symlinks()`** - Creates symlinks from CLAUDE.md and GEMINI.md to AGENTS.md, and migrates files from .cursor/rules and .windsurf/rules to .rules directory
-3. **`start_daemon()`** - Starts a file watching daemon that monitors .rules directory and maintains synchronized symlinks in .cursor/rules and .windsurf/rules. Enforces system-wide single instance operation using centralized PID file locking.
-4. **`enable_autostart()`** - Enables cross-platform autostart for the daemon using the auto-launch crate
-5. **`disable_autostart()`** - Disables autostart for the daemon
-6. **`is_autostart_enabled()`** - Checks if autostart is currently enabled
-7. **`SingleInstanceLock`** - Provides system-wide PID file locking mechanism to ensure only one daemon instance runs at a time across the entire system
-8. **Helper functions**:
+2. **`create_symlinks()`** - Creates symlinks from CLAUDE.md and GEMINI.md to AGENTS.md, migrates files from .cursor/rules and .windsurf/rules to .rules directory, and automatically adds the directory to the configuration file for daemon tracking
+3. **`start_daemon()`** - (Deprecated) Starts a file watching daemon that monitors a single .rules directory and maintains synchronized symlinks in .cursor/rules and .windsurf/rules. Enforces system-wide single instance operation using centralized PID file locking.
+4. **`start_system_daemon()`** - Starts a system-wide daemon that watches all configured directories from the configuration file, monitoring each directory's .rules subdirectory and maintaining synchronized symlinks across all projects
+5. **`enable_autostart()`** - Enables cross-platform autostart for the daemon using the auto-launch crate
+6. **`disable_autostart()`** - Disables autostart for the daemon
+7. **`is_autostart_enabled()`** - Checks if autostart is currently enabled
+8. **`SingleInstanceLock`** - Provides system-wide PID file locking mechanism to ensure only one daemon instance runs at a time across the entire system
+9. **Configuration management functions**:
+   - `load_config()` - Loads configuration from platform-specific application directory
+   - `save_config()` - Saves configuration to platform-specific application directory
+   - `add_directory_to_config()` - Adds a directory to the watched directories list
+   - `remove_directory_from_config()` - Removes a directory from the watched directories list
+10. **Helper functions**:
    - `ensure_rules_directory_exists()` - Creates .rules directory if it doesn't exist
    - `remove_existing_symlinks()` - Removes existing symlink files before creating new ones
    - `move_files_to_rules_dir()` - Moves files from source directories to .rules with conflict handling
@@ -49,8 +56,9 @@ The codebase provides the following main functionality:
 ### CLI Commands
 
 - `known init` - Initialize project with AGENTS.md file and .rules directory
-- `known symlink` - Create symlinks and migrate rules files from various AI assistant directories
-- `known daemon` - Start daemon to watch .rules directory and maintain symlinks in .cursor/rules and .windsurf/rules
+- `known symlink` - Create symlinks and migrate rules files from various AI assistant directories; automatically adds the directory to configuration for system-wide daemon tracking
+- `known daemon` - Start daemon to watch .rules directory and maintain symlinks in .cursor/rules and .windsurf/rules (deprecated, use `--system-wide` flag for new behavior)
+- `known daemon --system-wide` - Start system-wide daemon that watches all configured directories from the configuration file
 - `known enable-autostart` - Enable autostart for the daemon
 - `known disable-autostart` - Disable autostart for the daemon
 - `known autostart-status` - Check if autostart is enabled

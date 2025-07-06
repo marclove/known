@@ -4,6 +4,8 @@ use std::fs;
 use std::io;
 use std::path::Path;
 
+use crate::config::add_directory_to_config;
+
 /// The directory name for rules files
 const RULES_DIR: &str = ".rules";
 
@@ -99,6 +101,11 @@ pub fn create_symlinks_in_dir<P: AsRef<Path>>(dir: P) -> io::Result<()> {
     {
         std::os::windows::fs::symlink_file("AGENTS.md", &claude_path)?;
         std::os::windows::fs::symlink_file("AGENTS.md", &gemini_path)?;
+    }
+
+    // Add directory to configuration file for daemon tracking
+    if let Err(e) = add_directory_to_config(dir) {
+        eprintln!("Warning: Failed to add directory to config: {}", e);
     }
 
     Ok(())

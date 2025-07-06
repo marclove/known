@@ -1,7 +1,7 @@
 use clap::{Parser, Subcommand};
 use known::{
     create_agents_file, create_symlinks, disable_autostart, enable_autostart, is_autostart_enabled,
-    start_daemon,
+    start_daemon, start_system_daemon,
 };
 use std::process;
 use std::sync::mpsc;
@@ -25,6 +25,9 @@ enum Commands {
         /// Working directory for the daemon (defaults to current directory)
         #[arg(long, short)]
         working_dir: Option<String>,
+        /// Use system-wide daemon that watches all configured directories
+        #[arg(long)]
+        system_wide: bool,
     },
     /// Enable autostart for the daemon
     EnableAutostart,
@@ -54,16 +57,31 @@ fn main() {
                 process::exit(1);
             }
         },
-        Commands::Daemon { working_dir } => {
+        Commands::Daemon {
+            working_dir,
+            system_wide,
+        } => {
             // Create a channel for shutdown signal (not used in CLI mode, but required by API)
             let (_shutdown_tx, shutdown_rx) = mpsc::channel();
 
-            let daemon_dir = working_dir.as_deref().unwrap_or(".");
-            match start_daemon(daemon_dir, shutdown_rx) {
-                Ok(()) => println!("Daemon stopped"),
-                Err(e) => {
-                    eprintln!("Error running daemon: {}", e);
-                    process::exit(1);
+            if *system_wide {
+                // Use system-wide daemon that watches all configured directories
+                match start_system_daemon(shutdown_rx) {
+                    Ok(()) => println!("System-wide daemon stopped"),
+                    Err(e) => {
+                        eprintln!("Error running system-wide daemon: {}", e);
+                        process::exit(1);
+                    }
+                }
+            } else {
+                // Use single-directory daemon for backward compatibility
+                let daemon_dir = working_dir.as_deref().unwrap_or(".");
+                match start_daemon(daemon_dir, shutdown_rx) {
+                    Ok(()) => println!("Daemon stopped"),
+                    Err(e) => {
+                        eprintln!("Error running daemon: {}", e);
+                        process::exit(1);
+                    }
                 }
             }
         }

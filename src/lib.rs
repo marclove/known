@@ -5,6 +5,7 @@
 
 pub mod agents;
 pub mod autostart;
+pub mod config;
 pub mod daemon;
 pub mod single_instance;
 pub mod symlinks;
@@ -12,6 +13,9 @@ pub mod symlinks;
 // Re-export public API functions
 pub use agents::{create_agents_file, create_agents_file_in_dir};
 pub use autostart::{disable_autostart, enable_autostart, is_autostart_enabled};
-pub use daemon::start_daemon;
+pub use config::{
+    add_directory_to_config, load_config, remove_directory_from_config, save_config, Config,
+};
+pub use daemon::{start_daemon, start_system_daemon};
 pub use single_instance::SingleInstanceLock;
 pub use symlinks::{create_symlinks, create_symlinks_in_dir};
