@@ -222,7 +222,10 @@ mod tests {
         let result = save_config_to_file(&config, &config_path);
 
         if result.is_err() {
-            assert_eq!(result.unwrap_err().kind(), std::io::ErrorKind::PermissionDenied);
+            assert_eq!(
+                result.unwrap_err().kind(),
+                std::io::ErrorKind::PermissionDenied
+            );
         }
     }
 
@@ -318,8 +321,7 @@ mod tests {
         let dir_to_add = tempdir().unwrap();
 
         // Add a directory
-        let added =
-            add_directory_to_config_file(dir_to_add.path(), &config_path).unwrap();
+        let added = add_directory_to_config_file(dir_to_add.path(), &config_path).unwrap();
         assert!(added);
 
         // Verify it was added
@@ -328,8 +330,7 @@ mod tests {
         assert!(config.contains_directory(dir_to_add.path()));
 
         // Remove the directory
-        let removed =
-            remove_directory_from_config_file(dir_to_add.path(), &config_path).unwrap();
+        let removed = remove_directory_from_config_file(dir_to_add.path(), &config_path).unwrap();
         assert!(removed);
 
         // Verify it was removed

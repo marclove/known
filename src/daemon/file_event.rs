@@ -120,9 +120,9 @@ mod tests {
     use crate::constants::{CURSOR_RULES_DIR, RULES_DIR, WINDSURF_RULES_DIR};
     use crate::symlinks::create_symlink_to_file;
     use notify::{
-    event::{ModifyKind, RenameMode},
-    Event, EventKind,
-};
+        event::{ModifyKind, RenameMode},
+        Event, EventKind,
+    };
     use std::collections::HashMap;
     use std::fs;
     use tempfile::tempdir;
