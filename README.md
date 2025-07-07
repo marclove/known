@@ -1,3 +1,5 @@
+> WARNING!!!: This is still prerelease software. Backwards-incompatible changes will be pushed without warning. Stability will be indicated by a 1.0 release. The goal is to achieve a 1.0 release by the end of July.
+
 # Known
 
 A Rust library and CLI tool for managing agentic LLM instruction files in your projects.
