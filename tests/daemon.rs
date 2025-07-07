@@ -126,6 +126,8 @@ fn test_daemon_full_lifecycle() {
             break;
         }
 
+        thread::sleep(Duration::from_millis(200));
+
         // If daemon isn't running yet, continue waiting
         if stdout.contains("No daemon is currently running") {
             continue;
