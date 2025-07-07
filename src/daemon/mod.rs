@@ -147,11 +147,22 @@ mod tests {
 
     #[test]
     fn test_daemon_with_no_directories() {
-        let (_shutdown_tx, shutdown_rx) = mpsc::channel();
+        let (shutdown_tx, shutdown_rx) = mpsc::channel();
         let config = crate::config::Config::new();
 
-        // Start daemon with empty config
-        let result = start_daemon_with_test_config(shutdown_rx, config);
+        // Start daemon with empty config in a separate thread
+        let handle = std::thread::spawn(move || {
+            start_daemon_with_test_config(shutdown_rx, config)
+        });
+
+        // Give daemon time to start
+        std::thread::sleep(Duration::from_millis(100));
+
+        // Send shutdown signal
+        shutdown_tx.send(()).unwrap();
+
+        // Wait for daemon to finish
+        let result = handle.join().unwrap();
 
         // Should succeed and start watching config file
         assert!(result.is_ok());
@@ -224,17 +235,25 @@ mod tests {
         let mut config = crate::config::Config::new();
         config.add_directory(nonexistent_path);
 
-        let (_shutdown_tx, shutdown_rx) = mpsc::channel();
+        let (shutdown_tx, shutdown_rx) = mpsc::channel();
 
-        // Start daemon with nonexistent directory
-        let result = start_daemon_with_test_config(shutdown_rx, config);
+        // Start daemon with nonexistent directory in a separate thread
+        let handle = std::thread::spawn(move || {
+            start_daemon_with_test_config(shutdown_rx, config)
+        });
 
-        // May return an error if watcher setup fails, which is acceptable behavior
+        // Give daemon time to start
+        std::thread::sleep(Duration::from_millis(100));
+
+        // Send shutdown signal
+        shutdown_tx.send(()).unwrap();
+
+        // Wait for daemon to finish
+        let result = handle.join().unwrap();
+
+        // Should succeed - daemon starts even with nonexistent directories and just watches config file
         // The important thing is that it doesn't panic
-        if let Err(e) = result {
-            // Log the error but don't fail the test - this is expected behavior
-            println!("Expected error for nonexistent directory: {}", e);
-        }
+        assert!(result.is_ok(), "Daemon should start successfully even with nonexistent directories");
         // Test that it doesn't panic - reaching this point means success
     }
 
