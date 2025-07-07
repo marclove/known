@@ -178,7 +178,7 @@ fn test_symlink_command() {
 }
 
 #[test]
-#[cfg(not(ci))]
+#[cfg_attr(ci, ignore)]
 fn test_autostart_commands() {
     let mut cmd = Command::cargo_bin("known").unwrap();
     cmd.arg("enable-autostart");
