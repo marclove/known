@@ -2,6 +2,6 @@
   "checkpointing": {
     "enabled": true
   },
-  "sandbox": true,
+  "sandbox": false,
   "mcp_servers": {}
 }

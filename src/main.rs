@@ -5,7 +5,7 @@ use known::{
     stop_daemon,
 };
 use std::io;
-use std::process::{self, Command, Stdio};
+use std::process::{Command, Stdio};
 use std::sync::mpsc;
 
 #[derive(Parser)]
@@ -90,154 +90,94 @@ fn spawn_daemon_process() -> io::Result<()> {
     Ok(())
 }
 
-fn main() {
+fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = Cli::parse();
 
     match &cli.command {
-        Commands::Init => match create_agents_file() {
-            Ok(()) => println!("Successfully initialized project with AGENTS.md"),
-            Err(e) => {
-                eprintln!("Error creating AGENTS.md: {}", e);
-                process::exit(1);
-            }
-        },
-        Commands::Symlink => match create_symlinks() {
-            Ok(()) => println!(
+        Commands::Init => {
+            create_agents_file()?;
+            println!("Successfully initialized project with AGENTS.md");
+        }
+        Commands::Symlink => {
+            create_symlinks()?;
+            println!(
                 "Successfully created symlinks: CLAUDE.md and GEMINI.md now point to AGENTS.md"
-            ),
-            Err(e) => {
-                eprintln!("Error creating symlinks: {}", e);
-                process::exit(1);
-            }
-        },
+            );
+        }
         Commands::Start => {
-            // Spawn a new process to run the daemon
-            match spawn_daemon_process() {
-                Ok(()) => println!("Daemon started successfully"),
-                Err(e) => {
-                    eprintln!("Error starting daemon: {}", e);
-                    process::exit(1);
-                }
-            }
+            spawn_daemon_process()?;
+            println!("Daemon started successfully");
         }
         Commands::RunDaemon => {
-            // Warn users that this is an internal command
             eprintln!("WARNING: 'run-daemon' is an internal command used by 'start'.");
             eprintln!("You should typically use 'known start' instead to launch the daemon.");
             eprintln!("Continuing with daemon execution...");
             eprintln!();
 
-            // Create a channel for shutdown signal (not used in CLI mode, but required by API)
             let (_shutdown_tx, shutdown_rx) = mpsc::channel();
-
-            match start_daemon(shutdown_rx) {
-                Ok(()) => println!("Daemon stopped"),
-                Err(e) => {
-                    eprintln!("Error running daemon: {}", e);
-                    process::exit(1);
-                }
+            start_daemon(shutdown_rx)?;
+            println!("Daemon stopped");
+        }
+        Commands::EnableAutostart => {
+            enable_autostart()?;
+            println!("Autostart enabled successfully");
+        }
+        Commands::DisableAutostart => {
+            disable_autostart()?;
+            println!("Autostart disabled successfully");
+        }
+        Commands::AutostartStatus => {
+            let enabled = is_autostart_enabled()?;
+            if enabled {
+                println!("Autostart is enabled");
+            } else {
+                println!("Autostart is disabled");
             }
         }
-        Commands::EnableAutostart => match enable_autostart() {
-            Ok(()) => println!("Autostart enabled successfully"),
-            Err(e) => {
-                eprintln!("Error enabling autostart: {}", e);
-                process::exit(1);
-            }
-        },
-        Commands::DisableAutostart => match disable_autostart() {
-            Ok(()) => println!("Autostart disabled successfully"),
-            Err(e) => {
-                eprintln!("Error disabling autostart: {}", e);
-                process::exit(1);
-            }
-        },
-        Commands::AutostartStatus => match is_autostart_enabled() {
-            Ok(enabled) => {
-                if enabled {
-                    println!("Autostart is enabled");
-                } else {
-                    println!("Autostart is disabled");
-                }
-            }
-            Err(e) => {
-                eprintln!("Error checking autostart status: {}", e);
-                process::exit(1);
-            }
-        },
         Commands::Add { directory } => {
             let target_dir = match directory {
                 Some(dir) => dir.clone(),
-                None => match std::env::current_dir() {
-                    Ok(dir) => dir,
-                    Err(e) => {
-                        eprintln!("Error getting current directory: {}", e);
-                        process::exit(1);
-                    }
-                },
+                None => std::env::current_dir()?,
             };
 
-            // Validate that the directory exists
             if !target_dir.exists() {
-                eprintln!("Error: Directory '{}' does not exist", target_dir.display());
-                process::exit(1);
+                return Err(format!("Directory '{}' does not exist", target_dir.display()).into());
             }
 
             if !target_dir.is_dir() {
-                eprintln!("Error: '{}' is not a directory", target_dir.display());
-                process::exit(1);
+                return Err(format!("'{}' is not a directory", target_dir.display()).into());
             }
 
-            match add_directory_to_config(&target_dir) {
-                Ok(added) => {
-                    if added {
-                        println!(
-                            "Successfully added '{}' to watched directories",
-                            target_dir.display()
-                        );
-                    } else {
-                        println!(
-                            "Directory '{}' is already in the watched directories list",
-                            target_dir.display()
-                        );
-                    }
-                }
-                Err(e) => {
-                    eprintln!("Error adding directory to configuration: {}", e);
-                    process::exit(1);
-                }
+            let added = add_directory_to_config(&target_dir)?;
+            if added {
+                println!(
+                    "Successfully added '{}' to watched directories",
+                    target_dir.display()
+                );
+            } else {
+                println!(
+                    "Directory '{}' is already in the watched directories list",
+                    target_dir.display()
+                );
             }
         }
         Commands::Remove { directory } => {
             let target_dir = match directory {
                 Some(dir) => dir.clone(),
-                None => match std::env::current_dir() {
-                    Ok(dir) => dir,
-                    Err(e) => {
-                        eprintln!("Error getting current directory: {}", e);
-                        process::exit(1);
-                    }
-                },
+                None => std::env::current_dir()?,
             };
 
-            match remove_directory_from_config(&target_dir) {
-                Ok(removed) => {
-                    if removed {
-                        println!(
-                            "Successfully removed '{}' from watched directories",
-                            target_dir.display()
-                        );
-                    } else {
-                        println!(
-                            "Directory '{}' was not in the watched directories list",
-                            target_dir.display()
-                        );
-                    }
-                }
-                Err(e) => {
-                    eprintln!("Error removing directory from configuration: {}", e);
-                    process::exit(1);
-                }
+            let removed = remove_directory_from_config(&target_dir)?;
+            if removed {
+                println!(
+                    "Successfully removed '{}' from watched directories",
+                    target_dir.display()
+                );
+            } else {
+                println!(
+                    "Directory '{}' was not in the watched directories list",
+                    target_dir.display()
+                );
             }
         }
         Commands::Stop => match stop_daemon() {
@@ -246,29 +186,25 @@ fn main() {
                 if e.kind() == std::io::ErrorKind::NotFound {
                     println!("No daemon is currently running");
                 } else {
-                    eprintln!("Error stopping daemon: {}", e);
-                    process::exit(1);
+                    return Err(e.into());
                 }
             }
         },
-        Commands::List => match known::load_config() {
-            Ok(config) => {
-                let directories = config.get_watched_directories();
-                if directories.is_empty() {
-                    println!("No directories are currently being watched");
-                } else {
-                    println!("Watched directories:");
-                    for dir in directories {
-                        println!("  {}", dir.display());
-                    }
+        Commands::List => {
+            let config = known::load_config()?;
+            let directories = config.get_watched_directories();
+            if directories.is_empty() {
+                println!("No directories are currently being watched");
+            } else {
+                println!("Watched directories:");
+                for dir in directories {
+                    println!("  {}", dir.display());
                 }
             }
-            Err(e) => {
-                eprintln!("Error loading configuration: {}", e);
-                process::exit(1);
-            }
-        },
+        }
     }
+
+    Ok(())
 }
 
 #[cfg(test)]
