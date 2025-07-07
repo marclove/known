@@ -37,18 +37,22 @@ pub fn setup_all_watchers(
         .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
 
     if let Some(config_parent) = config_file_path.parent() {
-        if config_parent.exists() {
-            config_watcher
-                .watch(config_parent, RecursiveMode::NonRecursive)
-                .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
-            println!(
-                "Watching configuration file for changes: {}",
-                config_file_path.display()
-            );
-            // Add the config watcher to the watchers vector so it doesn't get dropped
-            watchers.push(config_watcher);
+        // Create the config directory if it doesn't exist
+        if !config_parent.exists() {
+            fs::create_dir_all(config_parent)?;
         }
+        
+        config_watcher
+            .watch(config_parent, RecursiveMode::NonRecursive)
+            .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+        println!(
+            "Watching configuration file for changes: {}",
+            config_file_path.display()
+        );
     }
+
+    // Always add the config watcher to the watchers vector so it doesn't get dropped
+    watchers.push(config_watcher);
 
     // Set up watchers for initial directories
     setup_directory_watchers(watched_directories, &tx, &mut watchers, &mut rules_paths)?;

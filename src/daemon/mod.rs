@@ -158,8 +158,8 @@ mod tests {
         // Give daemon time to start
         std::thread::sleep(Duration::from_millis(100));
 
-        // Send shutdown signal
-        shutdown_tx.send(()).unwrap();
+        // Send shutdown signal (may fail if daemon already stopped, which is ok)
+        let _ = shutdown_tx.send(());
 
         // Wait for daemon to finish
         let result = handle.join().unwrap();
@@ -245,8 +245,8 @@ mod tests {
         // Give daemon time to start
         std::thread::sleep(Duration::from_millis(100));
 
-        // Send shutdown signal
-        shutdown_tx.send(()).unwrap();
+        // Send shutdown signal (may fail if daemon already stopped, which is ok)
+        let _ = shutdown_tx.send(());
 
         // Wait for daemon to finish
         let result = handle.join().unwrap();
