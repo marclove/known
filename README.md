@@ -97,7 +97,7 @@ This command will:
 - Keep the rules directories synchronized with the unified `.rules` directory
 - Enforce system-wide single instance operation (only one daemon can run across the entire system)
 - Create a centralized PID file for process management
-- Run continuously until stopped
+- Run continuously until stopped, even if no directories are initially configured
 
 Stop the daemon:
 
@@ -144,7 +144,7 @@ create_agents_file()?;
 create_symlinks()?;
 
 // Start daemon to watch .rules directory
-start_daemon(".", rx)?;
+start_daemon(mpsc::channel().1)?;
 
 // Enable autostart for the daemon
 enable_autostart()?;

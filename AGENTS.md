@@ -14,6 +14,7 @@ This file provides guidance to agentic coding agents like [Claude Code](https://
 - **Check code**: `cargo check`
 - **Format code**: `cargo fmt`
 - **Lint**: `cargo clippy`
+- **Common development tasks**: `just -l`
 
 ## Architecture
 
@@ -22,17 +23,29 @@ The project follows standard Rust library structure:
 - `src/main.rs` - CLI interface using clap for command-line argument parsing
 - `src/agents.rs` - AGENTS.md file creation and migration functionality
 - `src/autostart.rs` - Cross-platform autostart management
-- `src/config.rs` - Configuration file management for tracking watched directories
+- `src/config/` - Configuration file management for tracking watched directories
+  - `src/config/mod.rs` - Public API and re-exports
+  - `src/config/io.rs` - File I/O operations for configuration
+  - `src/config/path.rs` - Configuration file path resolution
+  - `src/config/structure.rs` - `Config` struct and implementation
 - `src/constants.rs` - Shared constants used throughout the application
 - `src/daemon/` - Modular file watching daemon with single instance enforcement
   - `src/daemon/mod.rs` - Main daemon orchestration and lifecycle management
-  - `src/daemon/events.rs` - File system event handling and processing
-  - `src/daemon/watchers.rs` - File watcher setup and directory monitoring
+  - `src/daemon/config_event.rs` - Configuration file event detection
   - `src/daemon/config_handler.rs` - Configuration file change handling and hot-reloading
+  - `src/daemon/events.rs` - File system event handling and processing
+  - `src/daemon/file_event.rs` - File system event handling logic
   - `src/daemon/symlinks.rs` - Symlink management operations
-- `src/single_instance.rs` - PID file locking for single instance enforcement
+  - `src/daemon/watchers.rs` - File watcher setup and directory monitoring
+- `src/single_instance/` - PID file locking for single instance enforcement
+  - `src/single_instance/mod.rs` - Public API and tests
+  - `src/single_instance/lock.rs` - `SingleInstanceLock` struct and implementation
+  - `src/single_instance/path.rs` - System-wide lock file path functionality
+  - `src/single_instance/process.rs` - Process management utilities
+  - `src/single_instance/stop.rs` - Daemon stopping functionality
 - `src/symlinks.rs` - Symlink creation and rules directory management
 - `Cargo.toml` - Project configuration and dependencies
+- `justfile` - Just command runner for common development tasks
 
 ### Core Functions
 
