@@ -20,5 +20,5 @@ pub use config::{
     save_config, Config,
 };
 pub use daemon::start_daemon;
-pub use single_instance::{stop_daemon, SingleInstanceLock};
+pub use single_instance::{is_daemon_running, stop_daemon, SingleInstanceLock};
 pub use symlinks::{create_symlinks, create_symlinks_in_dir};

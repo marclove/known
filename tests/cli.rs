@@ -209,6 +209,49 @@ fn test_autostart_commands() {
 }
 
 #[test]
+fn test_enable_autostart_starts_daemon() {
+    if std::env::var("CI").is_ok() {
+        println!("Skipping test_enable_autostart_starts_daemon in CI environment");
+        return;
+    }
+
+    let temp_dir = tempdir().unwrap();
+    std::env::set_var("HOME", temp_dir.path());
+
+    // Ensure daemon is not running before test
+    Command::cargo_bin("known").unwrap().arg("stop").status().unwrap();
+    assert!(!known::is_daemon_running().unwrap(), "Daemon should not be running before test");
+
+    // Run enable-autostart
+    let mut enable_cmd = Command::cargo_bin("known").unwrap();
+    let output = enable_cmd.arg("enable-autostart").output().unwrap();
+    assert!(output.status.success());
+
+    // Wait for daemon to start by polling
+    let start_time = std::time::Instant::now();
+    let timeout = std::time::Duration::from_secs(5);
+    while !known::is_daemon_running().unwrap() {
+        if start_time.elapsed() > timeout {
+            panic!("Timeout waiting for daemon to start");
+        }
+        std::thread::sleep(std::time::Duration::from_millis(100));
+    }
+
+    // Verify daemon is running
+    assert!(known::is_daemon_running().unwrap(), "Daemon should be running after enable-autostart");
+
+    // Cleanup: stop daemon and disable autostart
+    let mut stop_cmd = Command::cargo_bin("known").unwrap();
+    stop_cmd.arg("stop");
+    stop_cmd
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Daemon stopped successfully"));
+    
+    Command::cargo_bin("known").unwrap().arg("disable-autostart").status().unwrap();
+}
+
+#[test]
 fn test_stop_command() {
     let mut cmd = Command::cargo_bin("known").unwrap();
     cmd.arg("stop");

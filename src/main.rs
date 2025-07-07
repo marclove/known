@@ -1,8 +1,8 @@
 use clap::{Parser, Subcommand};
 use known::{
     add_directory_to_config, create_agents_file, create_symlinks, disable_autostart,
-    enable_autostart, is_autostart_enabled, remove_directory_from_config, start_daemon,
-    stop_daemon,
+    enable_autostart, is_autostart_enabled, is_daemon_running, remove_directory_from_config,
+    start_daemon, stop_daemon,
 };
 use std::io;
 use std::process::{Command, Stdio};
@@ -121,6 +121,11 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Commands::EnableAutostart => {
             enable_autostart()?;
             println!("Autostart enabled successfully");
+
+            if !is_daemon_running()? {
+                spawn_daemon_process()?;
+                println!("Daemon started successfully");
+            }
         }
         Commands::DisableAutostart => {
             disable_autostart()?;

@@ -1,5 +1,5 @@
 //! Single instance enforcement functionality for daemons.
-//!
+//! 
 //! This module provides functionality to ensure only one instance of a daemon
 //! process can run at a time using PID files and file locking.
 
@@ -11,15 +11,86 @@ mod stop;
 pub use lock::SingleInstanceLock;
 pub use stop::stop_daemon;
 
+use path::get_system_wide_lock_path;
+use process::is_process_running;
+use std::io::{self, Read};
+
+/// Checks if the daemon is currently running by inspecting the lock file.
+///
+/// # Errors
+///
+/// Returns an error if the lock file cannot be read or its content is invalid.
+pub fn is_daemon_running() -> io::Result<bool> {
+    match get_system_wide_lock_path() {
+        Ok(path) => {
+            if !path.exists() {
+                return Ok(false);
+            }
+            let mut file = std::fs::File::open(path)?;
+            let mut contents = String::new();
+            file.read_to_string(&mut contents)?;
+            if let Ok(pid) = contents.trim().parse::<i32>() {
+                Ok(is_process_running(pid))
+            } else {
+                Ok(false)
+            }
+        }
+        Err(e) => {
+            if e.kind() == io::ErrorKind::NotFound {
+                Ok(false)
+            } else {
+                Err(e)
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::lock::SingleInstanceLock;
     use super::process::is_process_running;
     use super::stop::stop_daemon_with_test_path;
-    use std::io;
+    use std::io::{self, Read, Write};
     use std::thread;
     use std::time::Duration;
     use tempfile::tempdir;
+    use std::path::Path;
+
+    fn is_daemon_running_with_path<P: AsRef<Path>>(path: P) -> io::Result<bool> {
+        if !path.as_ref().exists() {
+            return Ok(false);
+        }
+        let mut file = std::fs::File::open(path)?;
+        let mut contents = String::new();
+        file.read_to_string(&mut contents)?;
+        if let Ok(pid) = contents.trim().parse::<i32>() {
+            Ok(is_process_running(pid))
+        } else {
+            Ok(false)
+        }
+    }
+
+    #[test]
+    fn test_is_daemon_running() {
+        let test_dir = tempdir().unwrap();
+        let test_lock_path = test_dir.path().join("test_is_daemon_running.pid");
+
+        // Initially, no daemon should be running
+        assert!(!is_daemon_running_with_path(&test_lock_path).unwrap());
+
+        // Create a lock file to simulate a running daemon
+        let mut file = std::fs::File::create(&test_lock_path).unwrap();
+        write!(file, "{}", std::process::id()).unwrap();
+
+        // Now, the daemon should be reported as running
+        assert!(is_daemon_running_with_path(&test_lock_path).unwrap());
+
+        // Clean up the lock file
+        std::fs::remove_file(&test_lock_path).unwrap();
+
+        // Now, it should be reported as not running again
+        assert!(!is_daemon_running_with_path(&test_lock_path).unwrap());
+    }
 
     #[test]
     fn test_single_instance_lock_acquisition() {
