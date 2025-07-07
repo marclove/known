@@ -1,7 +1,9 @@
 //! File watching daemon functionality for managing symlinks in rules directories.
 
+pub mod config_event;
 pub mod config_handler;
 pub mod events;
+pub mod file_event;
 pub mod symlinks;
 pub mod watchers;
 
