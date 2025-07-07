@@ -27,7 +27,11 @@ fn test_add_command() {
     // Determine what config directory the directories crate would actually use
     // with our custom HOME environment
     let config_dir = if cfg!(target_os = "macos") {
-        temp_dir.path().join("Library").join("Application Support").join("known")
+        temp_dir
+            .path()
+            .join("Library")
+            .join("Application Support")
+            .join("known")
     } else {
         temp_dir.path().join(".config").join("known")
     };
@@ -49,25 +53,28 @@ fn test_add_command() {
     // Test `add` command
     let mut cmd = Command::cargo_bin("known").unwrap();
     cmd.env("HOME", temp_dir.path())
-        .env("CI", "1")  // Force CI environment for debug logging
+        .env("CI", "1") // Force CI environment for debug logging
         .arg("add")
         .arg(&project_dir);
 
     println!("Running command: known add {}", project_dir.display());
     println!("With HOME={}", temp_dir.path().display());
-    
+
     // Check what config path would be resolved with our HOME override
-    println!("Expected config path: {}", config_dir.join("config.json").display());
+    println!(
+        "Expected config path: {}",
+        config_dir.join("config.json").display()
+    );
 
     let result = cmd.assert();
-    
+
     // Log any stderr for debugging
     println!("Command completed, checking output...");
-    
+
     result
         .success()
         .stdout(predicate::str::contains("Successfully added"));
-    
+
     println!("test_add_command completed successfully");
 }
 
@@ -80,7 +87,11 @@ fn test_remove_command() {
     // Determine what config directory the directories crate would actually use
     // with our custom HOME environment
     let config_dir = if cfg!(target_os = "macos") {
-        temp_dir.path().join("Library").join("Application Support").join("known")
+        temp_dir
+            .path()
+            .join("Library")
+            .join("Application Support")
+            .join("known")
     } else {
         temp_dir.path().join(".config").join("known")
     };
@@ -103,27 +114,33 @@ fn test_remove_command() {
     let mut add_cmd = Command::cargo_bin("known").unwrap();
     add_cmd
         .env("HOME", temp_dir.path())
-        .env("CI", "1")  // Force CI environment for debug logging
+        .env("CI", "1") // Force CI environment for debug logging
         .arg("add")
         .arg(&project_dir);
-    
-    add_cmd.assert()
+
+    add_cmd
+        .assert()
         .success()
         .stdout(predicate::str::contains("Successfully added"));
     println!("Add command completed successfully");
 
     // Then, test the `remove` command
-    println!("Running remove command: known remove {}", project_dir.display());
+    println!(
+        "Running remove command: known remove {}",
+        project_dir.display()
+    );
     let mut remove_cmd = Command::cargo_bin("known").unwrap();
-    remove_cmd.env("HOME", temp_dir.path())
-        .env("CI", "1")  // Force CI environment for debug logging
+    remove_cmd
+        .env("HOME", temp_dir.path())
+        .env("CI", "1") // Force CI environment for debug logging
         .arg("remove")
         .arg(&project_dir);
 
-    remove_cmd.assert()
+    remove_cmd
+        .assert()
         .success()
         .stdout(predicate::str::contains("Successfully removed"));
-    
+
     println!("test_remove_command completed successfully");
 }
 
@@ -138,7 +155,11 @@ fn test_symlink_command() {
     // Determine what config directory the directories crate would actually use
     // with our custom HOME environment
     let config_dir = if cfg!(target_os = "macos") {
-        temp_dir.path().join("Library").join("Application Support").join("known")
+        temp_dir
+            .path()
+            .join("Library")
+            .join("Application Support")
+            .join("known")
     } else {
         temp_dir.path().join(".config").join("known")
     };

@@ -41,7 +41,7 @@ pub fn setup_all_watchers(
         if !config_parent.exists() {
             fs::create_dir_all(config_parent)?;
         }
-        
+
         config_watcher
             .watch(config_parent, RecursiveMode::NonRecursive)
             .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
@@ -241,8 +241,16 @@ mod tests {
         assert!(result.is_ok());
 
         if let Ok(watcher_setup) = result {
-            assert_eq!(watcher_setup.watchers.len(), 1, "Should have 1 watcher (config file watcher)");
-            assert_eq!(watcher_setup.rules_paths.len(), 0, "Should have no rules paths");
+            assert_eq!(
+                watcher_setup.watchers.len(),
+                1,
+                "Should have 1 watcher (config file watcher)"
+            );
+            assert_eq!(
+                watcher_setup.rules_paths.len(),
+                0,
+                "Should have no rules paths"
+            );
             // Config file watcher is now included in watchers vector
         }
     }

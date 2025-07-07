@@ -41,12 +41,8 @@ where
 /// Checks if daemon is stopped by trying to stop it and checking the output
 fn is_daemon_stopped(home_dir: &Path) -> bool {
     let mut stop_cmd = Command::cargo_bin("known").unwrap();
-    let output = stop_cmd
-        .env("HOME", home_dir)
-        .arg("stop")
-        .output()
-        .unwrap();
-    
+    let output = stop_cmd.env("HOME", home_dir).arg("stop").output().unwrap();
+
     let stdout = String::from_utf8(output.stdout).unwrap();
     stdout.contains("No daemon is currently running")
 }
@@ -54,12 +50,8 @@ fn is_daemon_stopped(home_dir: &Path) -> bool {
 /// Checks if daemon is running by trying to stop it and checking the output
 fn is_daemon_running(home_dir: &Path) -> bool {
     let mut stop_cmd = Command::cargo_bin("known").unwrap();
-    let output = stop_cmd
-        .env("HOME", home_dir)
-        .arg("stop")
-        .output()
-        .unwrap();
-    
+    let output = stop_cmd.env("HOME", home_dir).arg("stop").output().unwrap();
+
     let stdout = String::from_utf8(output.stdout).unwrap();
     stdout.contains("Daemon stopped successfully")
 }

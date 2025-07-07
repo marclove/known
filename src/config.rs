@@ -110,7 +110,7 @@ pub fn get_config_file_path() -> io::Result<PathBuf> {
     // Check if HOME is set to a temporary directory (common in tests)
     // If so, bypass directories crate and use fallback path directly
     let is_temp_home = home_dir.contains("/tmp/") || home_dir.contains("temp");
-    
+
     // Debug logging for CI diagnostics
     if std::env::var("CI").is_ok() || std::env::var("GITHUB_ACTIONS").is_ok() {
         eprintln!("DEBUG: HOME={}", home_dir);
@@ -120,16 +120,22 @@ pub fn get_config_file_path() -> io::Result<PathBuf> {
     if is_temp_home {
         // Use platform-appropriate fallback path when HOME is temporary
         let config_dir = if cfg!(target_os = "macos") {
-            Path::new(&home_dir).join("Library").join("Application Support").join("known")
+            Path::new(&home_dir)
+                .join("Library")
+                .join("Application Support")
+                .join("known")
         } else {
             Path::new(&home_dir).join(".config").join("known")
         };
         let config_path = config_dir.join(CONFIG_FILE_NAME);
-        
+
         if std::env::var("CI").is_ok() || std::env::var("GITHUB_ACTIONS").is_ok() {
-            eprintln!("DEBUG: Using platform-aware fallback config path (temp HOME): {}", config_path.display());
+            eprintln!(
+                "DEBUG: Using platform-aware fallback config path (temp HOME): {}",
+                config_path.display()
+            );
         }
-        
+
         return Ok(config_path);
     }
 
@@ -137,48 +143,63 @@ pub fn get_config_file_path() -> io::Result<PathBuf> {
     if let Some(project_dirs) = ProjectDirs::from("", "", "known") {
         let config_dir = project_dirs.config_dir();
         let config_path = config_dir.join(CONFIG_FILE_NAME);
-        
+
         // Double-check that the platform-specific path actually respects HOME override
         if let Ok(expected_home) = std::env::var("HOME") {
             if !config_path.starts_with(&expected_home) && expected_home != home_dir {
                 // Platform-specific path doesn't match HOME override, use platform-aware fallback
                 let fallback_config_dir = if cfg!(target_os = "macos") {
-                    Path::new(&home_dir).join("Library").join("Application Support").join("known")
+                    Path::new(&home_dir)
+                        .join("Library")
+                        .join("Application Support")
+                        .join("known")
                 } else {
                     Path::new(&home_dir).join(".config").join("known")
                 };
                 let fallback_config_path = fallback_config_dir.join(CONFIG_FILE_NAME);
-                
+
                 if std::env::var("CI").is_ok() || std::env::var("GITHUB_ACTIONS").is_ok() {
                     eprintln!("DEBUG: Platform path doesn't match HOME, using platform-aware fallback: {}", fallback_config_path.display());
                 }
-                
+
                 return Ok(fallback_config_path);
             }
         }
-        
+
         // Debug logging for CI diagnostics
         if std::env::var("CI").is_ok() || std::env::var("GITHUB_ACTIONS").is_ok() {
-            eprintln!("DEBUG: Using platform-specific config path: {}", config_path.display());
-            eprintln!("DEBUG: Platform-specific config dir: {}", config_dir.display());
+            eprintln!(
+                "DEBUG: Using platform-specific config path: {}",
+                config_path.display()
+            );
+            eprintln!(
+                "DEBUG: Platform-specific config dir: {}",
+                config_dir.display()
+            );
         }
-        
+
         return Ok(config_path);
     }
 
     // Final platform-aware fallback
     let config_dir = if cfg!(target_os = "macos") {
-        Path::new(&home_dir).join("Library").join("Application Support").join("known")
+        Path::new(&home_dir)
+            .join("Library")
+            .join("Application Support")
+            .join("known")
     } else {
         Path::new(&home_dir).join(".config").join("known")
     };
     let config_path = config_dir.join(CONFIG_FILE_NAME);
-    
+
     // Debug logging for CI diagnostics
     if std::env::var("CI").is_ok() || std::env::var("GITHUB_ACTIONS").is_ok() {
-        eprintln!("DEBUG: Using final platform-aware fallback config path: {}", config_path.display());
+        eprintln!(
+            "DEBUG: Using final platform-aware fallback config path: {}",
+            config_path.display()
+        );
     }
-    
+
     Ok(config_path)
 }
 
@@ -277,7 +298,10 @@ where
 
     // Debug logging for CI diagnostics
     if std::env::var("CI").is_ok() || std::env::var("GITHUB_ACTIONS").is_ok() {
-        eprintln!("DEBUG: modify_config_safely called with config_path: {}", config_path.display());
+        eprintln!(
+            "DEBUG: modify_config_safely called with config_path: {}",
+            config_path.display()
+        );
         if let Some(parent) = config_path.parent() {
             eprintln!("DEBUG: Config parent directory: {}", parent.display());
             eprintln!("DEBUG: Config parent exists: {}", parent.exists());
@@ -289,13 +313,20 @@ where
         fs::create_dir_all(parent).map_err(|e| {
             // Enhanced error for CI debugging
             if std::env::var("CI").is_ok() || std::env::var("GITHUB_ACTIONS").is_ok() {
-                eprintln!("DEBUG: Failed to create config directory {}: {}", parent.display(), e);
+                eprintln!(
+                    "DEBUG: Failed to create config directory {}: {}",
+                    parent.display(),
+                    e
+                );
             }
             e
         })?;
-        
+
         if std::env::var("CI").is_ok() || std::env::var("GITHUB_ACTIONS").is_ok() {
-            eprintln!("DEBUG: Successfully created config directory: {}", parent.display());
+            eprintln!(
+                "DEBUG: Successfully created config directory: {}",
+                parent.display()
+            );
         }
     }
 

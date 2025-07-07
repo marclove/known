@@ -151,9 +151,7 @@ mod tests {
         let config = crate::config::Config::new();
 
         // Start daemon with empty config in a separate thread
-        let handle = std::thread::spawn(move || {
-            start_daemon_with_test_config(shutdown_rx, config)
-        });
+        let handle = std::thread::spawn(move || start_daemon_with_test_config(shutdown_rx, config));
 
         // Give daemon time to start
         std::thread::sleep(Duration::from_millis(100));
@@ -194,7 +192,10 @@ mod tests {
 
         // Wait for daemon to finish
         let result = handle.join().unwrap();
-        assert!(result.is_ok(), "Daemon should start successfully even with empty config");
+        assert!(
+            result.is_ok(),
+            "Daemon should start successfully even with empty config"
+        );
     }
 
     #[test]
@@ -238,9 +239,7 @@ mod tests {
         let (shutdown_tx, shutdown_rx) = mpsc::channel();
 
         // Start daemon with nonexistent directory in a separate thread
-        let handle = std::thread::spawn(move || {
-            start_daemon_with_test_config(shutdown_rx, config)
-        });
+        let handle = std::thread::spawn(move || start_daemon_with_test_config(shutdown_rx, config));
 
         // Give daemon time to start
         std::thread::sleep(Duration::from_millis(100));
@@ -253,7 +252,10 @@ mod tests {
 
         // Should succeed - daemon starts even with nonexistent directories and just watches config file
         // The important thing is that it doesn't panic
-        assert!(result.is_ok(), "Daemon should start successfully even with nonexistent directories");
+        assert!(
+            result.is_ok(),
+            "Daemon should start successfully even with nonexistent directories"
+        );
         // Test that it doesn't panic - reaching this point means success
     }
 
