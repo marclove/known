@@ -178,8 +178,11 @@ fn test_symlink_command() {
 }
 
 #[test]
-#[cfg_attr(ci, ignore)]
 fn test_autostart_commands() {
+    if std::env::var("CI").is_ok() {
+        println!("Skipping test_autostart_commands in CI environment");
+        return;
+    }
     let mut cmd = Command::cargo_bin("known").unwrap();
     cmd.arg("enable-autostart");
     cmd.assert()

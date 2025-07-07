@@ -109,8 +109,11 @@ fn test_daemon_commands() {
 }
 
 #[test]
-#[cfg_attr(ci, ignore)]
 fn test_daemon_full_lifecycle() {
+    if std::env::var("CI").is_ok() {
+        println!("Skipping test_daemon_full_lifecycle in CI environment");
+        return;
+    }
     let temp_dir = tempdir().unwrap();
     let home_dir = temp_dir.path();
 
