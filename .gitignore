@@ -3,3 +3,4 @@
 # Test temporary directories
 test_*
 *.profraw
+cobertura.xml

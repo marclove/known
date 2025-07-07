@@ -157,6 +157,81 @@ fn test_symlink_command() {
 }
 
 #[test]
+#[cfg(not(ci))]
+fn test_autostart_commands() {
+    let mut cmd = Command::cargo_bin("known").unwrap();
+    cmd.arg("enable-autostart");
+    cmd.assert()
+        .success()
+        .stdout(predicate::str::contains("Autostart enabled successfully"));
+
+    let mut cmd = Command::cargo_bin("known").unwrap();
+    cmd.arg("autostart-status");
+    cmd.assert()
+        .success()
+        .stdout(predicate::str::contains("Autostart is enabled"));
+
+    let mut cmd = Command::cargo_bin("known").unwrap();
+    cmd.arg("disable-autostart");
+    cmd.assert()
+        .success()
+        .stdout(predicate::str::contains("Autostart disabled successfully"));
+
+    let mut cmd = Command::cargo_bin("known").unwrap();
+    cmd.arg("autostart-status");
+    cmd.assert()
+        .success()
+        .stdout(predicate::str::contains("Autostart is disabled"));
+}
+
+#[test]
+fn test_stop_command() {
+    let mut cmd = Command::cargo_bin("known").unwrap();
+    cmd.arg("stop");
+    cmd.assert()
+        .success()
+        .stdout(predicate::str::contains("No daemon is currently running"));
+}
+
+#[test]
+fn test_list_command() {
+    let temp_dir = tempdir().unwrap();
+    let project_dir = temp_dir.path().join("project");
+    std::fs::create_dir(&project_dir).unwrap();
+
+    let config_dir = if cfg!(target_os = "macos") {
+        temp_dir
+            .path()
+            .join("Library")
+            .join("Application Support")
+            .join("known")
+    } else {
+        temp_dir.path().join(".config").join("known")
+    };
+    std::fs::create_dir_all(&config_dir).unwrap();
+
+    let mut cmd = Command::cargo_bin("known").unwrap();
+    cmd.env("HOME", temp_dir.path()).arg("list");
+    cmd.assert().success().stdout(predicate::str::contains(
+        "No directories are currently being watched",
+    ));
+
+    let mut add_cmd = Command::cargo_bin("known").unwrap();
+    add_cmd
+        .env("HOME", temp_dir.path())
+        .arg("add")
+        .arg(&project_dir);
+    add_cmd.assert().success();
+
+    let mut cmd = Command::cargo_bin("known").unwrap();
+    cmd.env("HOME", temp_dir.path()).arg("list");
+    cmd.assert()
+        .success()
+        .stdout(predicate::str::contains("Watched directories:"))
+        .stdout(predicate::str::contains(project_dir.to_str().unwrap()));
+}
+
+#[test]
 fn test_help_messages() {
     let mut cmd = Command::cargo_bin("known").unwrap();
     cmd.arg("--help");
