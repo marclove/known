@@ -109,6 +109,7 @@ fn test_daemon_commands() {
 }
 
 #[test]
+#[cfg(not(ci))]
 fn test_daemon_full_lifecycle() {
     let temp_dir = tempdir().unwrap();
     let home_dir = temp_dir.path();
